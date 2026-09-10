@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { HufflepuffCrest } from './HufflepuffCrest';
-import { HOUSE_ROLES_LIST, DEFAULT_DISCORD_USER } from '../data/hufflepuffData';
+import { REGISTERABLE_HOUSE_ROLES, DEFAULT_DISCORD_USER } from '../data/hufflepuffData';
 import { HouseRole, StudentProfile } from '../types';
 import { saveUserProfileToFirestore } from '../lib/hufflepuffFirestore';
 import { 
@@ -114,14 +114,55 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
       alert('กรุณาอัปโหลดไฟล์รูปภาพเท่านั้น (.png, .jpg, .webp)');
       return;
     }
+
     const reader = new FileReader();
     reader.onload = (uploadEvent) => {
-      if (uploadEvent.target?.result) {
-        setCharacterPhoto(uploadEvent.target.result as string);
+      const rawResult = uploadEvent.target?.result as string;
+      if (!rawResult) return;
+
+      // Compress and resize image to avoid PayloadTooLargeError and Firestore document size limits
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const maxDim = 800;
+          let { width, height } = img;
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.82);
+            setCharacterPhoto(compressedDataUrl);
+          } else {
+            setCharacterPhoto(rawResult);
+          }
+        } catch (e) {
+          console.warn('Image compression fallback:', e);
+          setCharacterPhoto(rawResult);
+        }
+
         if (errors.characterPhoto) {
           setErrors(prev => ({ ...prev, characterPhoto: '' }));
         }
-      }
+      };
+      img.onerror = () => {
+        setCharacterPhoto(rawResult);
+        if (errors.characterPhoto) {
+          setErrors(prev => ({ ...prev, characterPhoto: '' }));
+        }
+      };
+      img.src = rawResult;
     };
     reader.readAsDataURL(file);
   };
@@ -186,19 +227,27 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
         body: JSON.stringify(profilePayload),
       });
 
-      const data = await response.json();
+      let data: any = null;
+      try {
+        const text = await response.text();
+        if (text) {
+          data = JSON.parse(text);
+        }
+      } catch (parseErr) {
+        console.warn('Could not parse response as JSON:', parseErr);
+      }
 
       if (!response.ok) {
         if (response.status === 409) {
-          setServerError(data.message || 'บัญชี Discord นี้ถูกใช้ลงทะเบียนไปแล้ว (1 บัญชี Discord สมัครได้ครั้งเดียว)');
+          setServerError(data?.message || 'บัญชี Discord นี้ถูกใช้ลงทะเบียนไปแล้ว (1 บัญชี Discord สมัครได้ครั้งเดียว)');
         } else {
-          setServerError(data.message || 'เกิดข้อผิดพลาดในการบันทึกข้อมูล');
+          setServerError(data?.message || `เกิดข้อผิดพลาดในการบันทึกข้อมูล (${response.status})`);
         }
         setIsSubmitting(false);
         return;
       }
 
-      const savedUser = data.user || profilePayload;
+      const savedUser = data?.user || profilePayload;
       const finalProfile: StudentProfile = {
         discordId: savedUser.discordId,
         name: savedUser.name,
@@ -425,9 +474,8 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
             </label>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-              {HOUSE_ROLES_LIST.map((roleOption) => {
+              {REGISTERABLE_HOUSE_ROLES.map((roleOption) => {
                 const isSelected = selectedRoles.includes(roleOption);
-                const isRoleAdmin = roleOption === 'แอดมิน';
                 return (
                   <button
                     key={roleOption}
@@ -435,18 +483,12 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
                     onClick={() => toggleRole(roleOption)}
                     className={`flex items-center justify-between p-2.5 rounded-xl border text-xs font-medium transition-all text-left cursor-pointer ${
                       isSelected
-                        ? isRoleAdmin
-                          ? 'bg-[#FEE101]/25 border-[#FEE101] text-[#FEE101] ring-1 ring-[#FEE101] shadow-md shadow-[#FEE101]/20 font-bold'
-                          : 'bg-[#FEE101]/15 border-[#FEE101] text-[#FEE101] shadow-sm shadow-[#FEE101]/10'
-                        : isRoleAdmin
-                        ? 'bg-[#181822] border-amber-500/50 text-amber-200 hover:border-[#FEE101]'
+                        ? 'bg-[#FEE101]/15 border-[#FEE101] text-[#FEE101] shadow-sm shadow-[#FEE101]/10 font-semibold'
                         : 'bg-[#0f0f13] border-neutral-800 text-neutral-400 hover:border-neutral-700 hover:text-neutral-200'
                     }`}
                   >
                     <span className="flex items-center gap-1.5 truncate">
-                      {isRoleAdmin && <span className="text-amber-400">🛡️</span>}
                       <span>{roleOption}</span>
-                      {isRoleAdmin && <span className="text-[10px] text-amber-300 font-normal">(Admin)</span>}
                     </span>
                     {isSelected ? (
                       <Check className="w-3.5 h-3.5 text-[#FEE101] flex-shrink-0" />
@@ -463,18 +505,23 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
                 {errors.roles}
               </p>
             )}
-            {selectedRoles.includes('แอดมิน') ? (
+
+            {/* If user already holds Admin from Owner, display locked status */}
+            {selectedRoles.includes('แอดมิน') && (
               <div className="mt-2.5 p-3 rounded-xl bg-amber-500/15 border border-[#FEE101]/40 text-xs text-amber-200 flex items-start gap-2.5 animate-in fade-in">
                 <ShieldCheck className="w-4 h-4 text-[#FEE101] flex-shrink-0 mt-0.5" />
                 <div>
-                  <strong className="text-[#FEE101]">ยศแอดมิน (Admin Role) เปิดใช้งาน:</strong> บัญชีนี้มีสิทธิ์สูงสุดในการ <strong>เพิ่ม ลบ หรือแก้ไขปฏิทิน ตารางเรียน และกิจกรรมบ้าน</strong> ได้อย่างอิสระ
+                  <strong className="text-[#FEE101]">ยศแอดมิน (Admin Role):</strong> สมาชิกท่านนี้ได้รับการแต่งตั้งยศแอดมินโดยเจ้าของเว็บแล้ว (มีสิทธิ์จัดการปฏิทิน ตารางเรียน และข่าวสาร)
                 </div>
               </div>
-            ) : (
-              <p className="text-[11px] text-neutral-400 mt-2">
-                หมายเหตุ: เลือกตำแหน่ง <strong className="text-[#FEE101]">"แอดมิน"</strong> หรือ "Badger วิชาการ" เพื่อรับสิทธิ์ในการเพิ่ม ลบ และแก้ไขปฏิทินตารางเรียน
-              </p>
             )}
+
+            <div className="mt-2.5 p-2.5 rounded-xl bg-[#14141d] border border-amber-500/20 text-[11px] text-neutral-400 flex items-center gap-2">
+              <span className="text-base">👑</span>
+              <span>
+                <strong>นโยบายสิทธิ์:</strong> ยศ <strong className="text-[#FEE101]">"แอดมิน" (Admin)</strong> สงวนสิทธิ์ให้เฉพาะ <strong>เจ้าของเว็บ (Website Owner)</strong> เป็นผู้แต่งตั้งให้สมาชิกเท่านั้น เพื่อความปลอดภัยของระบบบ้าน
+              </span>
+            </div>
           </div>
 
           {/* Image Upload Area with Drag & Drop & File Selection (ระบบใส่รูปด่วนถูกนำออกแล้ว) */}

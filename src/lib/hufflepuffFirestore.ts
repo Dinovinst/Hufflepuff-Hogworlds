@@ -12,7 +12,8 @@ import {
   StudentProfile, 
   DirectoryMember, 
   HouseAnnouncement, 
-  ClassScheduleItem 
+  ClassScheduleItem,
+  HouseRole
 } from '../types';
 import { 
   INITIAL_ANNOUNCEMENTS, 
@@ -53,6 +54,32 @@ export async function saveUserProfileToFirestore(profile: StudentProfile): Promi
   try {
     const docRef = doc(db, USERS_COLLECTION, profile.discordId);
     await setDoc(docRef, profile, { merge: true });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, path);
+  }
+}
+
+/**
+ * Update member roles in Firestore (Owner authorized action)
+ */
+export async function updateMemberRolesInFirestore(
+  discordId: string,
+  houseRoles: HouseRole[],
+  primaryRole?: HouseRole
+): Promise<void> {
+  const path = `${USERS_COLLECTION}/${discordId}`;
+  try {
+    const docRef = doc(db, USERS_COLLECTION, discordId);
+    const resolvedPrimary = primaryRole || houseRoles[0] || 'นักเรียนทั่วไป';
+    await setDoc(
+      docRef,
+      {
+        houseRoles,
+        houseRole: resolvedPrimary,
+        updatedAt: new Date().toISOString(),
+      },
+      { merge: true }
+    );
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, path);
   }

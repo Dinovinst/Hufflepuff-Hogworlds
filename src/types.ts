@@ -1,4 +1,6 @@
 export type HouseRole =
+  | 'เจ้าของเว็บ'
+  | 'แอดมิน'
   | 'นักเรียนทั่วไป'
   | 'Prefect'
   | 'Badger แข่งขัน'
@@ -8,7 +10,6 @@ export type HouseRole =
   | 'Helper'
   | 'หัวหน้าบ้าน'
   | 'Badger Leader'
-  | 'แอดมิน'
   | 'นักกีฬาเชียร์ลีดเดอร์'
   | 'นักกีฬาประลองเวทย์'
   | 'นักกีฬาไม้กวาด'
@@ -28,6 +29,7 @@ export interface StudentProfile {
   bio?: string;
   pointsContributed?: number;
   possessedSpells?: string[]; // IDs of spells possessed
+  isOwner?: boolean; // Whether the user is the website owner
 }
 
 export type AppView =

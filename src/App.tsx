@@ -22,12 +22,15 @@ import { HouseNavbar } from './components/HouseNavbar';
 import { HouseDashboardView } from './components/HouseDashboardView';
 import { EducationCenterView } from './components/EducationCenterView';
 import { MembersDirectoryTab } from './components/MembersDirectoryTab';
+import { OwnerAuthModal } from './components/OwnerAuthModal';
+import { isOwner } from './utils/permissions';
 import { 
   subscribeToMembers, 
   subscribeToAnnouncements, 
   subscribeToSchedules, 
   getUserProfileFromFirestore, 
   saveUserProfileToFirestore, 
+  updateMemberRolesInFirestore,
   saveAnnouncementToFirestore, 
   deleteAnnouncementFromFirestore, 
   saveScheduleToFirestore, 
@@ -40,6 +43,7 @@ export default function App() {
   const [userProfile, setUserProfile] = useState<StudentProfile>(INITIAL_STUDENT_PROFILE);
   const [activeDiscordUser, setActiveDiscordUser] = useState<DiscordAuthUser | null>(null);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [showOwnerAuthModal, setShowOwnerAuthModal] = useState(false);
 
   // App state
   const [announcements, setAnnouncements] = useState<HouseAnnouncement[]>(INITIAL_ANNOUNCEMENTS);
@@ -77,7 +81,11 @@ export default function App() {
           } else {
             // Check fallback server database
             fetch(`/api/users/${savedDiscordId}`)
-              .then((res) => (res.ok ? res.json() : null))
+              .then(async (res) => {
+                if (!res.ok) return null;
+                const text = await res.text();
+                return text ? JSON.parse(text) : null;
+              })
               .then((data) => {
                 if (data?.user) {
                   setUserProfile(data.user);
@@ -154,44 +162,95 @@ export default function App() {
     setCurrentView('register');
   };
 
-  const handleToggleAdminRole = () => {
+  // Dedicated Website Owner Role Assignment Handler
+  const handleUpdateMemberRoles = async (
+    memberDiscordId: string,
+    updatedRoles: HouseRole[],
+    primaryRole?: HouseRole
+  ) => {
+    const resolvedPrimary = primaryRole || updatedRoles[0] || 'นักเรียนทั่วไป';
+
+    // 1. Update local members state immediately for snappy response
+    setMembersData((prev) =>
+      prev.map((m) => {
+        const matches =
+          m.id === memberDiscordId ||
+          m.id === `mem-${memberDiscordId}` ||
+          m.studentId === memberDiscordId;
+        if (matches) {
+          return {
+            ...m,
+            role: resolvedPrimary,
+            roles: updatedRoles,
+          };
+        }
+        return m;
+      })
+    );
+
+    // 2. If updating current logged in user, sync userProfile
+    if (userProfile.discordId === memberDiscordId) {
+      setUserProfile((prev) => ({
+        ...prev,
+        houseRole: resolvedPrimary,
+        houseRoles: updatedRoles,
+      }));
+    }
+
+    // 3. Persist to Firestore
+    try {
+      await updateMemberRolesInFirestore(memberDiscordId, updatedRoles, resolvedPrimary);
+    } catch (err) {
+      console.warn('Syncing roles to Firestore:', err);
+    }
+
+    // 4. Persist to server API
+    try {
+      await fetch(`/api/users/${memberDiscordId}/roles`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          houseRoles: updatedRoles,
+          houseRole: resolvedPrimary,
+        }),
+      });
+    } catch (err) {
+      console.warn('Syncing roles to Server:', err);
+    }
+  };
+
+  const handleOwnerAuthenticated = () => {
     setUserProfile((prev) => {
-      const isCurrentlyAdmin =
-        prev.houseRole === 'แอดมิน' || (prev.houseRoles && prev.houseRoles.includes('แอดมิน'));
-      let updatedRoles: HouseRole[];
-      let updatedPrimaryRole: HouseRole;
-
-      if (isCurrentlyAdmin) {
-        const remaining = (prev.houseRoles || []).filter((r) => r !== 'แอดมิน');
-        updatedRoles = remaining.length > 0 ? remaining : (['นักเรียนทั่วไป'] as HouseRole[]);
-        updatedPrimaryRole = updatedRoles[0];
-      } else {
-        const existing = prev.houseRoles || [prev.houseRole];
-        updatedRoles = ['แอดมิน', ...existing.filter((r) => r !== 'แอดมิน')];
-        updatedPrimaryRole = 'แอดมิน';
-      }
-
+      const existing = prev.houseRoles || [prev.houseRole];
+      const updatedRoles: HouseRole[] = ['เจ้าของเว็บ', ...existing.filter((r) => r !== 'เจ้าของเว็บ')];
       const updated: StudentProfile = {
         ...prev,
-        houseRole: updatedPrimaryRole,
+        isOwner: true,
+        houseRole: 'เจ้าของเว็บ',
         houseRoles: updatedRoles,
       };
 
-      // Persist to Firebase Firestore
       if (updated.discordId) {
-        saveUserProfileToFirestore(updated).catch((err) =>
-          console.warn('Failed to sync role to Firestore:', err)
-        );
-        fetch(`/api/users/${prev.discordId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            houseRole: updatedPrimaryRole,
-            houseRoles: updatedRoles,
-          }),
-        }).catch((err) => console.error('Failed to sync role to server:', err));
+        saveUserProfileToFirestore(updated).catch(console.warn);
       }
+      return updated;
+    });
+  };
 
+  const handleOwnerRevoked = () => {
+    setUserProfile((prev) => {
+      const remaining = (prev.houseRoles || []).filter((r) => r !== 'เจ้าของเว็บ');
+      const updatedRoles = remaining.length > 0 ? remaining : (['หัวหน้าบ้าน'] as HouseRole[]);
+      const updated: StudentProfile = {
+        ...prev,
+        isOwner: false,
+        houseRole: updatedRoles[0],
+        houseRoles: updatedRoles,
+      };
+
+      if (updated.discordId) {
+        saveUserProfileToFirestore(updated).catch(console.warn);
+      }
       return updated;
     });
   };
@@ -247,6 +306,7 @@ export default function App() {
 
   const handleLogout = () => {
     localStorage.removeItem('hufflepuff_user_id');
+    localStorage.removeItem('hufflepuff_owner_authenticated');
     setActiveDiscordUser(null);
     setUserStatus('guest');
     setCurrentView('landing');
@@ -256,13 +316,13 @@ export default function App() {
   if (currentView === 'landing') {
     return (
       <LandingView
-        onLoginSuccess={handleDiscordLoginSuccess}
+        onDiscordLoginSuccess={handleDiscordLoginSuccess}
         onNeedRegistration={handleNeedRegistration}
       />
     );
   }
 
-  // If on Registration or Edit Profile page
+  // If on Registration page
   if (currentView === 'register') {
     return (
       <RegistrationView
@@ -287,7 +347,7 @@ export default function App() {
           setIsEditingProfile(true);
           setCurrentView('register');
         }}
-        onToggleAdmin={handleToggleAdminRole}
+        onOpenOwnerAuth={() => setShowOwnerAuthModal(true)}
       />
 
       {/* Main View Switcher */}
@@ -318,7 +378,11 @@ export default function App() {
 
         {currentView === 'members' && (
           <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
-            <MembersDirectoryTab members={membersData} />
+            <MembersDirectoryTab
+              members={membersData}
+              currentUser={userProfile}
+              onUpdateMemberRoles={handleUpdateMemberRoles}
+            />
           </div>
         )}
       </main>
@@ -339,6 +403,15 @@ export default function App() {
           </div>
         </div>
       </footer>
+
+      {/* Owner Authentication Modal */}
+      <OwnerAuthModal
+        isOpen={showOwnerAuthModal}
+        onClose={() => setShowOwnerAuthModal(false)}
+        isOwnerAuthenticated={isOwner(userProfile)}
+        onAuthenticated={handleOwnerAuthenticated}
+        onRevoke={handleOwnerRevoked}
+      />
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { HufflepuffCrest } from './HufflepuffCrest';
 import { AppView, StudentProfile } from '../types';
-import { isAdmin } from '../utils/permissions';
+import { isAdmin, isOwner } from '../utils/permissions';
 import { 
   LayoutDashboard, 
   CalendarDays, 
@@ -10,11 +10,12 @@ import {
   Users, 
   Clock, 
   LogOut, 
-  Sparkles,
-  ShieldCheck,
-  ChevronDown,
-  Menu,
-  X
+  Sparkles, 
+  ShieldCheck, 
+  Crown,
+  ChevronDown, 
+  Menu, 
+  X 
 } from 'lucide-react';
 
 interface HouseNavbarProps {
@@ -23,7 +24,7 @@ interface HouseNavbarProps {
   userProfile: StudentProfile;
   onLogout: () => void;
   onEditProfile: () => void;
-  onToggleAdmin?: () => void;
+  onOpenOwnerAuth?: () => void;
 }
 
 export const HouseNavbar: React.FC<HouseNavbarProps> = ({
@@ -32,11 +33,14 @@ export const HouseNavbar: React.FC<HouseNavbarProps> = ({
   userProfile,
   onLogout,
   onEditProfile,
-  onToggleAdmin,
+  onOpenOwnerAuth,
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [irlTime, setIrlTime] = useState('');
   const [rpTime, setRpTime] = useState('20:45 RP');
+
+  const userIsOwner = isOwner(userProfile);
+  const userIsAdmin = isAdmin(userProfile);
 
   useEffect(() => {
     const updateTime = () => {
@@ -90,26 +94,29 @@ export const HouseNavbar: React.FC<HouseNavbarProps> = ({
         {/* Logo & House Title */}
         <div 
           onClick={() => onNavigate('dashboard')}
-          className="flex items-center gap-3 cursor-pointer group flex-shrink-0"
+          className="flex items-center gap-3 cursor-pointer group select-none"
         >
-          <HufflepuffCrest size="sm" withGlow={true} />
+          <div className="relative">
+            <HufflepuffCrest size="sm" />
+            <span className="absolute -bottom-1 -right-1 w-3 h-3 rounded-full bg-[#FEE101] border-2 border-[#111115]" />
+          </div>
           <div>
             <div className="flex items-center gap-1.5">
-              <span className="font-cinzel text-base sm:text-lg font-black tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-[#FFF59D] via-[#FEE101] to-[#C89B10] group-hover:brightness-125 transition-all">
+              <h1 className="font-cinzel text-lg sm:text-xl font-bold tracking-wider text-[#FEE101] group-hover:text-amber-200 transition-colors">
                 HUFFLEPUFF
-              </span>
-              <span className="text-[10px] uppercase px-1.5 py-0.2 rounded bg-amber-950 border border-[#FEE101]/40 text-[#FEE101] font-semibold tracking-wider">
-                FiveM
+              </h1>
+              <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.2 rounded bg-amber-950/80 border border-[#FEE101]/40 text-amber-300">
+                FiveM SRP
               </span>
             </div>
-            <p className="text-[11px] text-amber-200/70 font-medium tracking-wide">
-              Common Room & Community
+            <p className="text-[11px] text-neutral-400 font-serif tracking-wide hidden sm:block">
+              Dedication, Patience & Loyalty • Hogworlds
             </p>
           </div>
         </div>
 
         {/* Desktop Navigation Links */}
-        <div className="hidden lg:flex items-center gap-1 bg-[#18181f] p-1 rounded-xl border border-[#FEE101]/20">
+        <div className="hidden lg:flex items-center gap-1 bg-[#16161c] p-1 rounded-xl border border-neutral-800">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = currentView === item.id;
@@ -117,7 +124,7 @@ export const HouseNavbar: React.FC<HouseNavbarProps> = ({
               <button
                 key={item.id}
                 onClick={() => onNavigate(item.id)}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all ${
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all cursor-pointer ${
                   isActive
                     ? 'bg-[#FEE101] text-neutral-950 shadow-md shadow-[#FEE101]/20 font-semibold'
                     : 'text-neutral-300 hover:text-amber-200 hover:bg-neutral-800/60'
@@ -130,12 +137,13 @@ export const HouseNavbar: React.FC<HouseNavbarProps> = ({
           })}
         </div>
 
-        {/* User Mini Profile (According to specs: FiveM character image, In-game name, Year, Role tag e.g. Prefect 🟡) */}
-        <div className="flex items-center gap-3">
+        {/* User Mini Profile & Owner Controls */}
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* User Profile Card */}
           <div 
             onClick={onEditProfile}
             title="คลิกเพื่อดูหรือแก้ไขโปรไฟล์"
-            className="flex items-center gap-3 p-1.5 pr-3 rounded-xl bg-[#16161c] border border-[#FEE101]/30 hover:border-[#FEE101] transition-all cursor-pointer group"
+            className="flex items-center gap-2.5 p-1.5 pr-3 rounded-xl bg-[#16161c] border border-[#FEE101]/30 hover:border-[#FEE101] transition-all cursor-pointer group"
           >
             <div className="relative">
               <img
@@ -157,7 +165,12 @@ export const HouseNavbar: React.FC<HouseNavbarProps> = ({
                   ปี {userProfile.year}
                 </span>
                 <span className="text-neutral-600">•</span>
-                {isAdmin(userProfile) ? (
+                {userIsOwner ? (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/25 border border-[#FEE101] text-[#FEE101] shadow-[0_0_12px_rgba(254,225,1,0.3)]">
+                    <Crown className="w-3 h-3 text-[#FEE101]" />
+                    <span>เจ้าของเว็บ</span>
+                  </span>
+                ) : userIsAdmin ? (
                   <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 border border-[#FEE101] text-[#FEE101] shadow-[0_0_10px_rgba(254,225,1,0.2)]">
                     <ShieldCheck className="w-3 h-3 text-[#FEE101]" />
                     <span>แอดมิน</span>
@@ -172,19 +185,19 @@ export const HouseNavbar: React.FC<HouseNavbarProps> = ({
             </div>
           </div>
 
-          {/* Quick Admin Role Toggle (For easy preview and testing permissions) */}
-          {onToggleAdmin && (
+          {/* Owner Access & Management Control */}
+          {onOpenOwnerAuth && (
             <button
-              onClick={onToggleAdmin}
-              title={isAdmin(userProfile) ? "คลิกเพื่อสลับเป็นยศนักเรียนทั่วไป (ทดสอบมุมมองนักเรียน)" : "คลิกเพื่อสลับเป็นยศแอดมิน (ทดสอบสิทธิ์จัดการ)"}
-              className={`hidden md:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
-                isAdmin(userProfile)
-                  ? 'bg-amber-500/10 border-[#FEE101] text-[#FEE101] hover:bg-amber-500/20'
-                  : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-700'
+              onClick={onOpenOwnerAuth}
+              title={userIsOwner ? "สิทธิ์เจ้าของเว็บใช้งานอยู่ (คลิกเพื่อดูหรือจัดการ)" : "ยืนยันสิทธิ์เจ้าของเว็บเพื่อแต่งตั้งแอดมิน"}
+              className={`hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                userIsOwner
+                  ? 'bg-[#FEE101] text-neutral-950 border-[#FEE101] shadow-md shadow-[#FEE101]/25 hover:bg-[#ffe83d]'
+                  : 'bg-neutral-900 border-amber-500/30 text-amber-300 hover:text-white hover:border-[#FEE101]'
               }`}
             >
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>{isAdmin(userProfile) ? 'โหมด: แอดมิน 🛡️' : 'สลับเป็น: แอดมิน'}</span>
+              <Crown className="w-3.5 h-3.5" />
+              <span>{userIsOwner ? 'โหมดเจ้าของเว็บ 👑' : 'สิทธิ์เจ้าของเว็บ'}</span>
             </button>
           )}
 
@@ -192,7 +205,7 @@ export const HouseNavbar: React.FC<HouseNavbarProps> = ({
           <button
             onClick={onLogout}
             title="ออกจากระบบ / กลับหน้าลงทะเบียน"
-            className="p-2.5 rounded-xl bg-[#18181f] border border-neutral-800 hover:border-red-500/50 hover:text-red-400 text-neutral-400 transition-colors"
+            className="p-2.5 rounded-xl bg-[#18181f] border border-neutral-800 hover:border-red-500/50 hover:text-red-400 text-neutral-400 transition-colors cursor-pointer"
           >
             <LogOut className="w-4 h-4" />
           </button>
@@ -200,7 +213,7 @@ export const HouseNavbar: React.FC<HouseNavbarProps> = ({
           {/* Mobile Menu Hamburger */}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="lg:hidden p-2.5 rounded-xl bg-[#18181f] border border-[#FEE101]/30 text-amber-200 hover:text-white"
+            className="lg:hidden p-2 rounded-xl bg-neutral-900 border border-neutral-800 text-neutral-300 hover:text-white"
           >
             {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
@@ -209,7 +222,7 @@ export const HouseNavbar: React.FC<HouseNavbarProps> = ({
 
       {/* Mobile Menu Dropdown */}
       {mobileMenuOpen && (
-        <div className="lg:hidden border-t border-[#FEE101]/20 bg-[#141418] px-4 py-3 space-y-1">
+        <div className="lg:hidden border-t border-[#FEE101]/20 bg-[#141418] px-4 py-3 space-y-2 animate-in fade-in">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = currentView === item.id;
@@ -231,6 +244,19 @@ export const HouseNavbar: React.FC<HouseNavbarProps> = ({
               </button>
             );
           })}
+
+          {onOpenOwnerAuth && (
+            <button
+              onClick={() => {
+                onOpenOwnerAuth();
+                setMobileMenuOpen(false);
+              }}
+              className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold bg-amber-500/20 border border-[#FEE101]/50 text-[#FEE101]"
+            >
+              <Crown className="w-4 h-4" />
+              <span>{userIsOwner ? 'โหมดเจ้าของเว็บ (เปิดใช้งานอยู่) 👑' : 'ยืนยันสิทธิ์เจ้าของเว็บ'}</span>
+            </button>
+          )}
         </div>
       )}
     </nav>

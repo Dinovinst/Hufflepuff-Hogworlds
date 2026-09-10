@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { DirectoryMember, HouseRole } from '../types';
+import { DirectoryMember, HouseRole, StudentProfile } from '../types';
 import { HOUSE_ROLES_LIST } from '../data/hufflepuffData';
+import { isOwner } from '../utils/permissions';
+import { OwnerRoleModal } from './OwnerRoleModal';
 import { 
   Users, 
   Search, 
@@ -9,6 +11,7 @@ import {
   Circle, 
   Crown, 
   ShieldAlert, 
+  ShieldCheck,
   BookOpen, 
   Trophy, 
   Smile, 
@@ -16,11 +19,18 @@ import {
   LayoutGrid, 
   Layers,
   Wand2,
-  X
+  X,
+  Settings
 } from 'lucide-react';
 
 interface MembersDirectoryTabProps {
   members: DirectoryMember[];
+  currentUser?: StudentProfile | null;
+  onUpdateMemberRoles?: (
+    memberDiscordId: string,
+    updatedRoles: HouseRole[],
+    primaryRole?: HouseRole
+  ) => Promise<void>;
 }
 
 interface RoleGroup {
@@ -36,10 +46,10 @@ const ROLE_GROUPS: RoleGroup[] = [
   {
     id: 'leadership',
     title: 'คณะผู้บริหารและคณาจารย์ประจำบ้าน (House Leadership)',
-    subtitle: 'หัวหน้าบ้าน, Badger Leader, ศาสตราจารย์ และผู้ดูแลระดับสูง',
+    subtitle: 'เจ้าของเว็บ, หัวหน้าบ้าน, Badger Leader, ศาสตราจารย์ และผู้ดูแลระดับสูง',
     icon: Crown,
     color: 'text-[#FEE101]',
-    roles: ['หัวหน้าบ้าน', 'Badger Leader', 'ศาสตราจารย์ประจำบ้าน', 'แอดมิน'],
+    roles: ['เจ้าของเว็บ', 'หัวหน้าบ้าน', 'Badger Leader', 'ศาสตราจารย์ประจำบ้าน', 'แอดมิน'],
   },
   {
     id: 'prefects',
@@ -81,11 +91,18 @@ const ROLE_GROUPS: RoleGroup[] = [
   },
 ];
 
-export const MembersDirectoryTab: React.FC<MembersDirectoryTabProps> = ({ members }) => {
+export const MembersDirectoryTab: React.FC<MembersDirectoryTabProps> = ({
+  members,
+  currentUser,
+  onUpdateMemberRoles,
+}) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRoleFilter, setSelectedRoleFilter] = useState<string>('All');
   const [viewMode, setViewMode] = useState<'grouped' | 'grid'>('grouped');
   const [selectedMember, setSelectedMember] = useState<DirectoryMember | null>(null);
+  const [editingMemberForRoles, setEditingMemberForRoles] = useState<DirectoryMember | null>(null);
+
+  const userIsOwner = isOwner(currentUser);
 
   // Filter members by search and single role
   const filteredMembers = members.filter((member) => {
@@ -196,12 +213,49 @@ export const MembersDirectoryTab: React.FC<MembersDirectoryTabProps> = ({ member
             <span>{spellCount} คาถา</span>
           </span>
         </div>
+
+        {/* OWNER PRIVILEGE: Manage Member Roles Button */}
+        {userIsOwner && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setEditingMemberForRoles(member);
+            }}
+            className="mt-3 w-full flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl bg-[#FEE101]/15 border border-[#FEE101]/50 text-[#FEE101] hover:bg-[#FEE101] hover:text-neutral-950 text-xs font-bold transition-all shadow-sm cursor-pointer group-hover:border-[#FEE101]"
+          >
+            <Crown className="w-3.5 h-3.5" />
+            <span>👑 จัดการยศ / แอดมิน</span>
+          </button>
+        )}
       </div>
     );
   };
 
   return (
     <div className="space-y-6">
+      {/* OWNER PRIVILEGE BANNER */}
+      {userIsOwner && (
+        <div className="p-4 sm:p-5 rounded-3xl bg-amber-500/15 border-2 border-[#FEE101] text-amber-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-[0_0_35px_rgba(254,225,1,0.15)] animate-in fade-in">
+          <div className="flex items-center gap-3.5">
+            <div className="w-11 h-11 rounded-2xl bg-[#FEE101] text-neutral-950 flex items-center justify-center font-bold shadow-md flex-shrink-0">
+              <Crown className="w-6 h-6" />
+            </div>
+            <div>
+              <h4 className="font-cinzel text-sm sm:text-base font-bold text-[#FEE101]">
+                โหมดเจ้าของเว็บ: ระบบจัดการยศและแต่งตั้งแอดมิน (Owner Role Manager)
+              </h4>
+              <p className="text-xs text-amber-200/90 mt-0.5">
+                คุณมีสิทธิ์สูงสุดในการแต่งตั้งหรือถอดยศ <strong>"แอดมิน"</strong> และจัดสรรตำแหน่งในบ้านให้กับสมาชิกทุกคน โดยคลิกที่ปุ่ม <strong>"👑 จัดการยศ / แอดมิน"</strong> บนการ์ดของสมาชิก
+              </p>
+            </div>
+          </div>
+          <span className="self-start sm:self-auto px-3.5 py-1.5 rounded-full bg-[#FEE101] text-neutral-950 text-xs font-bold whitespace-nowrap shadow-sm">
+            👑 สิทธิ์เจ้าของเว็บเปิดใช้งาน
+          </span>
+        </div>
+      )}
+
       {/* Header Banner */}
       <div className="bg-[#141418] border border-[#FEE101]/25 rounded-3xl p-6 sm:p-7 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -439,15 +493,42 @@ export const MembersDirectoryTab: React.FC<MembersDirectoryTabProps> = ({ member
               </div>
             </div>
 
+            {/* Owner action inside modal */}
+            {userIsOwner && (
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingMemberForRoles(selectedMember);
+                  setSelectedMember(null);
+                }}
+                className="w-full mb-2.5 py-2.5 rounded-xl bg-amber-500/20 border-2 border-[#FEE101] text-[#FEE101] font-bold text-xs hover:bg-[#FEE101] hover:text-neutral-950 transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-md"
+              >
+                <Crown className="w-4 h-4" />
+                <span>👑 จัดการยศและแต่งตั้งแอดมินสำหรับสมาชิกท่านนี้</span>
+              </button>
+            )}
+
             <button
               onClick={() => setSelectedMember(null)}
-              className="w-full py-2.5 rounded-xl bg-[#FEE101] text-neutral-950 font-bold text-xs hover:bg-[#ffe83d] transition-colors cursor-pointer"
+              className="w-full py-2.5 rounded-xl bg-neutral-900 border border-neutral-700 text-neutral-300 font-bold text-xs hover:text-white hover:bg-neutral-800 transition-colors cursor-pointer"
             >
               ปิดหน้าต่าง
             </button>
           </div>
         </div>
       )}
+
+      {/* Owner Role Assignment Modal */}
+      <OwnerRoleModal
+        isOpen={Boolean(editingMemberForRoles)}
+        onClose={() => setEditingMemberForRoles(null)}
+        member={editingMemberForRoles}
+        onSaveRoles={async (discordId, updatedRoles, primaryRole) => {
+          if (onUpdateMemberRoles) {
+            await onUpdateMemberRoles(discordId, updatedRoles, primaryRole);
+          }
+        }}
+      />
     </div>
   );
 };

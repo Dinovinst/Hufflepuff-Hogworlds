@@ -9,7 +9,9 @@ import {
   StudentProfile,
 } from '../types';
 
-export const HOUSE_ROLES_LIST: HouseRole[] = [
+// Roles available for members during registration or self-profile editing
+// NOTE: "แอดมิน" and "เจ้าของเว็บ" are strictly excluded and can only be granted by the Owner
+export const REGISTERABLE_HOUSE_ROLES: HouseRole[] = [
   'นักเรียนทั่วไป',
   'Prefect',
   'Badger แข่งขัน',
@@ -19,7 +21,24 @@ export const HOUSE_ROLES_LIST: HouseRole[] = [
   'Helper',
   'หัวหน้าบ้าน',
   'Badger Leader',
+  'นักกีฬาเชียร์ลีดเดอร์',
+  'นักกีฬาประลองเวทย์',
+  'นักกีฬาไม้กวาด',
+  'นักกีฬา SAS',
+];
+
+export const HOUSE_ROLES_LIST: HouseRole[] = [
+  'เจ้าของเว็บ',
   'แอดมิน',
+  'นักเรียนทั่วไป',
+  'Prefect',
+  'Badger แข่งขัน',
+  'Badger กิจกรรม',
+  'Badger วิชาการ',
+  'ศาสตราจารย์ประจำบ้าน',
+  'Helper',
+  'หัวหน้าบ้าน',
+  'Badger Leader',
   'นักกีฬาเชียร์ลีดเดอร์',
   'นักกีฬาประลองเวทย์',
   'นักกีฬาไม้กวาด',
