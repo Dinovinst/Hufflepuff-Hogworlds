@@ -1,11 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   AppView, 
   HouseAnnouncement, 
   HouseEvent, 
-  StudentProfile 
+  StudentProfile,
+  EventCategory,
+  AnnouncementCategory 
 } from '../types';
 import { canManageHouseContent } from '../utils/permissions';
+import { convertOcToIc, getCurrentLiveIcTime } from '../utils/timeConversion';
 import { 
   Megaphone, 
   Calendar, 
@@ -57,21 +60,54 @@ export const HouseDashboardView: React.FC<HouseDashboardViewProps> = ({
   const [editingAnnouncement, setEditingAnnouncement] = useState<HouseAnnouncement | null>(null);
   const [formTitle, setFormTitle] = useState('');
   const [formContent, setFormContent] = useState('');
-  const [formCategory, setFormCategory] = useState<HouseAnnouncement['category']>('ข่าวสารสำคัญ');
+  const [formCategory, setFormCategory] = useState<AnnouncementCategory>('ข่าวสารสำคัญ');
   const [formPinned, setFormPinned] = useState(false);
+
+  // Live IC clock state for SRP immersion
+  const [liveIcClock, setLiveIcClock] = useState(getCurrentLiveIcTime());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setLiveIcClock(getCurrentLiveIcTime());
+    }, 15000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Modal for Create/Edit Event
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<HouseEvent | null>(null);
   const [formEventTitle, setFormEventTitle] = useState('');
+  const [formEventDate, setFormEventDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [formEventDateLabel, setFormEventDateLabel] = useState('');
-  const [formEventTimeIrl, setFormEventTimeIrl] = useState('');
+  const [formEventTimeIrl, setFormEventTimeIrl] = useState('20:00');
   const [formEventTimeRp, setFormEventTimeRp] = useState('');
   const [formEventLocation, setFormEventLocation] = useState('');
-  const [formEventCategory, setFormEventCategory] = useState<HouseEvent['category']>('meeting');
+  const [formEventCategory, setFormEventCategory] = useState<EventCategory>('ประชุม');
 
   // Check RBAC permission
   const hasManagementPermission = canManageHouseContent(userProfile);
+
+  const formatDateToThaiLabel = (dateStr: string) => {
+    if (!dateStr) return '';
+    try {
+      const parts = dateStr.split('-');
+      const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+      return d.toLocaleDateString('th-TH', { 
+        weekday: 'short',
+        day: 'numeric', 
+        month: 'short', 
+        year: 'numeric' 
+      });
+    } catch {
+      return dateStr;
+    }
+  };
+
+  const handleOocTimeChange = (oocStr: string) => {
+    setFormEventTimeIrl(oocStr);
+    const conv = convertOcToIc(oocStr);
+    setFormEventTimeRp(conv.summaryText);
+  };
 
   const toggleEventJoin = (id: string) => {
     setJoinedEvents((prev) => ({
@@ -81,20 +117,25 @@ export const HouseDashboardView: React.FC<HouseDashboardViewProps> = ({
   };
 
   const openCreateEventModal = () => {
+    const todayStr = new Date().toISOString().split('T')[0];
     setEditingEvent(null);
     setFormEventTitle('');
-    setFormEventDateLabel('12 ก.ย. (เสาร์)');
-    setFormEventTimeIrl('20:00 - 21:30 น.');
-    setFormEventTimeRp('14:00 - 15:30 น.');
+    setFormEventDate(todayStr);
+    setFormEventDateLabel(formatDateToThaiLabel(todayStr));
+    setFormEventTimeIrl('20:00');
+    const conv = convertOcToIc('20:00');
+    setFormEventTimeRp(conv.summaryText);
     setFormEventLocation('ห้องนั่งเล่นรวมฮัฟเฟิลพัฟ');
-    setFormEventCategory('meeting');
+    setFormEventCategory('ประชุม');
     setIsEventModalOpen(true);
   };
 
   const openEditEventModal = (ev: HouseEvent) => {
     setEditingEvent(ev);
     setFormEventTitle(ev.title);
-    setFormEventDateLabel(ev.dateLabel);
+    const dateVal = ev.date || new Date().toISOString().split('T')[0];
+    setFormEventDate(dateVal);
+    setFormEventDateLabel(ev.dateLabel || formatDateToThaiLabel(dateVal));
     setFormEventTimeIrl(ev.timeIrl);
     setFormEventTimeRp(ev.timeRp);
     setFormEventLocation(ev.location);
@@ -115,13 +156,16 @@ export const HouseDashboardView: React.FC<HouseDashboardViewProps> = ({
     e.preventDefault();
     if (!formEventTitle.trim()) return;
 
+    const label = formEventDateLabel || formatDateToThaiLabel(formEventDate);
+
     if (editingEvent) {
       const updated = events.map((ev) =>
         ev.id === editingEvent.id
           ? {
               ...ev,
               title: formEventTitle.trim(),
-              dateLabel: formEventDateLabel.trim(),
+              date: formEventDate,
+              dateLabel: label,
               timeIrl: formEventTimeIrl.trim(),
               timeRp: formEventTimeRp.trim(),
               location: formEventLocation.trim(),
@@ -134,7 +178,8 @@ export const HouseDashboardView: React.FC<HouseDashboardViewProps> = ({
       const newEvent: HouseEvent = {
         id: `ev-${Date.now()}`,
         title: formEventTitle.trim(),
-        dateLabel: formEventDateLabel.trim(),
+        date: formEventDate,
+        dateLabel: label,
         timeIrl: formEventTimeIrl.trim(),
         timeRp: formEventTimeRp.trim(),
         location: formEventLocation.trim(),
@@ -509,6 +554,27 @@ export const HouseDashboardView: React.FC<HouseDashboardViewProps> = ({
               </div>
             </div>
 
+            {/* Live Clock & IC Time Status Banner */}
+            <div className="mb-4 p-3 rounded-2xl bg-gradient-to-r from-amber-950/40 via-neutral-900 to-neutral-900 border border-[#FEE101]/25 flex flex-wrap items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                </span>
+                <span className="text-neutral-300 font-medium">
+                  เวลาจริง OOC: <strong className="text-white">{liveIcClock.ocTimeStr}</strong>
+                </span>
+                <span className="text-neutral-500">➔</span>
+                <span className="text-[#FEE101] font-semibold flex items-center gap-1">
+                  <span>เวลาฮอกวอตส์ IC:</span>
+                  <strong>{liveIcClock.summaryText}</strong>
+                </span>
+              </div>
+              <div className="text-[11px] text-amber-200/80 bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-[#FEE101]/20">
+                กะที่ {liveIcClock.cycleNumber} / 6 (4 ชม. OOC = 1 วัน IC)
+              </div>
+            </div>
+
             {/* Events Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {events.map((ev) => {
@@ -527,7 +593,7 @@ export const HouseDashboardView: React.FC<HouseDashboardViewProps> = ({
                         </span>
                         
                         <div className="flex items-center gap-1.5">
-                          <span className="text-[11px] text-neutral-400">
+                          <span className="text-[11px] text-neutral-300 bg-neutral-900 px-2 py-0.5 rounded border border-neutral-800">
                             {ev.timeRp}
                           </span>
                           {hasManagementPermission && (
@@ -551,9 +617,12 @@ export const HouseDashboardView: React.FC<HouseDashboardViewProps> = ({
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-[10px] font-medium text-amber-400/80 bg-amber-950/40 px-2 py-0.5 rounded border border-amber-500/20">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className="text-[10px] font-medium text-amber-300 bg-amber-950/50 px-2 py-0.5 rounded border border-amber-500/25">
                           {ev.dateLabel}
+                        </span>
+                        <span className="text-[10px] font-semibold text-[#FEE101] bg-[#FEE101]/10 px-2 py-0.5 rounded border border-[#FEE101]/30">
+                          {ev.category}
                         </span>
                       </div>
 
@@ -681,9 +750,10 @@ export const HouseDashboardView: React.FC<HouseDashboardViewProps> = ({
                     className="w-full px-3 py-2 rounded-xl bg-[#0f0f13] border border-[#FEE101]/30 text-xs text-amber-50 outline-none"
                   >
                     <option value="ข่าวสารสำคัญ">ข่าวสารสำคัญ</option>
-                    <option value="กิจกรรม Roleplay">กิจกรรม Roleplay</option>
-                    <option value="กฎระเบียบบ้าน">กฎระเบียบบ้าน</option>
-                    <option value="ประกาศฝึกซ้อม">ประกาศฝึกซ้อม</option>
+                    <option value="กิจกรรม">กิจกรรม</option>
+                    <option value="การเรียน">การเรียน</option>
+                    <option value="ฝึกซ้อม">ฝึกซ้อม</option>
+                    <option value="อื่นๆ">อื่นๆ</option>
                   </select>
                 </div>
 
@@ -768,64 +838,96 @@ export const HouseDashboardView: React.FC<HouseDashboardViewProps> = ({
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-neutral-200 mb-1">
-                    วันที่ (เช่น 12 ก.ย. (เสาร์)) <span className="text-red-400">*</span>
+                    วันที่จัดกิจกรรม (เลือกจากปฏิทิน) <span className="text-red-400">*</span>
                   </label>
                   <input
-                    type="text"
-                    value={formEventDateLabel}
-                    onChange={(e) => setFormEventDateLabel(e.target.value)}
-                    placeholder="เช่น 12 ก.ย. (เสาร์)"
-                    className="w-full px-3.5 py-2 rounded-xl bg-[#0f0f13] border border-[#FEE101]/30 focus:border-[#FEE101] text-xs text-amber-50 outline-none"
+                    type="date"
+                    value={formEventDate}
+                    onChange={(e) => {
+                      setFormEventDate(e.target.value);
+                      setFormEventDateLabel(formatDateToThaiLabel(e.target.value));
+                    }}
+                    className="w-full px-3.5 py-2 rounded-xl bg-[#0f0f13] border border-[#FEE101]/30 focus:border-[#FEE101] text-xs text-amber-50 outline-none cursor-pointer"
                     required
                   />
+                  {formEventDate && (
+                    <span className="block text-[11px] text-[#FEE101] mt-1">
+                      📅 {formatDateToThaiLabel(formEventDate)}
+                    </span>
+                  )}
                 </div>
 
                 <div>
                   <label className="block text-xs font-medium text-neutral-200 mb-1">
-                    หมวดหมู่กิจกรรม
+                    หมวดหมู่กิจกรรม <span className="text-red-400">*</span>
                   </label>
                   <select
                     value={formEventCategory}
                     onChange={(e) => setFormEventCategory(e.target.value as any)}
                     className="w-full px-3 py-2 rounded-xl bg-[#0f0f13] border border-[#FEE101]/30 text-xs text-amber-50 outline-none"
                   >
-                    <option value="meeting">การนัดหมาย / ประชุมบ้าน (Meeting)</option>
-                    <option value="quidditch">ควิดดิช / กีฬา (Quidditch)</option>
-                    <option value="class">คาบเรียนพิเศษ (Class)</option>
-                    <option value="duel">ประลองเวทมนตร์ / กิจกรรม (Duel)</option>
+                    <option value="ประชุม">ประชุม</option>
+                    <option value="กีฬา">กีฬา</option>
+                    <option value="การเรียน">การเรียน</option>
+                    <option value="คาบพิเศษ">คาบพิเศษ</option>
+                    <option value="กิจกรรม">กิจกรรม</option>
+                    <option value="อื่นๆ">อื่นๆ</option>
                   </select>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-neutral-200 mb-1">
-                    เวลาจริง (IRL) <span className="text-red-400">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={formEventTimeIrl}
-                    onChange={(e) => setFormEventTimeIrl(e.target.value)}
-                    placeholder="เช่น 20:00 - 21:30 น."
-                    className="w-full px-3.5 py-2 rounded-xl bg-[#0f0f13] border border-[#FEE101]/30 focus:border-[#FEE101] text-xs text-amber-50 outline-none"
-                    required
-                  />
+              <div className="p-3.5 rounded-xl bg-[#0f0f13] border border-[#FEE101]/25 space-y-3">
+                <div className="flex items-center justify-between text-xs font-semibold text-amber-300">
+                  <span className="flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-[#FEE101]" />
+                    <span>ระบบคำนวณเวลาอัตโนมัติ (OOC ➔ IC)</span>
+                  </span>
+                  <span className="text-[10px] text-neutral-400 font-normal">
+                    4 ชม. OOC = 1 วัน IC
+                  </span>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-medium text-neutral-200 mb-1">
-                    เวลาในเกม (RP)
-                  </label>
-                  <input
-                    type="text"
-                    value={formEventTimeRp}
-                    onChange={(e) => setFormEventTimeRp(e.target.value)}
-                    placeholder="เช่น 14:00 - 15:30 น."
-                    className="w-full px-3.5 py-2 rounded-xl bg-[#0f0f13] border border-[#FEE101]/30 focus:border-[#FEE101] text-xs text-amber-50 outline-none"
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-medium text-neutral-300 mb-1">
+                      เวลาจริงนอกเกม (OOC) <span className="text-red-400">*</span>
+                    </label>
+                    <input
+                      type="time"
+                      value={formEventTimeIrl}
+                      onChange={(e) => handleOocTimeChange(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl bg-[#16161c] border border-[#FEE101]/40 focus:border-[#FEE101] text-xs text-amber-50 outline-none cursor-pointer"
+                      required
+                    />
+                    <span className="block text-[10px] text-neutral-400 mt-1">
+                      ใส่เวลาจริง ระบบจะคำนวณเวลา IC ให้ทันที
+                    </span>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-medium text-neutral-300 mb-1">
+                      เวลาในโลกเวทมนตร์ (IC แปลงอัตโนมัติ)
+                    </label>
+                    <input
+                      type="text"
+                      value={formEventTimeRp}
+                      onChange={(e) => setFormEventTimeRp(e.target.value)}
+                      placeholder="คำนวณอัตโนมัติ..."
+                      className="w-full px-3 py-2 rounded-xl bg-[#16161c] border border-amber-500/30 focus:border-[#FEE101] text-xs text-[#FEE101] font-semibold outline-none"
+                    />
+                    {formEventTimeIrl && (
+                      <span className="block text-[10px] text-emerald-400 mt-1 font-medium">
+                        ✓ {convertOcToIc(formEventTimeIrl).summaryText} (กะที่ {convertOcToIc(formEventTimeIrl).cycleNumber})
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="text-[10px] text-neutral-400 bg-neutral-900/60 p-2 rounded-lg border border-neutral-800 leading-relaxed">
+                  💡 <strong>กติกากะเวลา:</strong> 3 ชม. OOC = กลางวัน IC (06:00 - 18:00 น.) | 1 ชม. OOC = กลางคืน IC (18:00 - 06:00 น.)
                 </div>
               </div>
 

@@ -287,7 +287,17 @@ export const MembersDirectoryTab: React.FC<MembersDirectoryTabProps> = ({ member
       </div>
 
       {/* Main Members Display */}
-      {viewMode === 'grouped' && selectedRoleFilter === 'All' ? (
+      {members.length === 0 ? (
+        <div className="py-20 text-center bg-[#141418] rounded-3xl border border-neutral-800 p-8">
+          <div className="w-16 h-16 rounded-2xl bg-[#FEE101]/10 border border-[#FEE101]/20 flex items-center justify-center text-[#FEE101] mx-auto mb-4">
+            <Users className="w-8 h-8" />
+          </div>
+          <h3 className="font-cinzel text-xl font-bold text-amber-100 mb-2">ยังไม่มีสมาชิกที่ลงทะเบียนในขณะนี้</h3>
+          <p className="text-sm text-neutral-400 max-w-md mx-auto">
+            รายชื่อสมาชิกจะปรากฏขึ้นโดยอัตโนมัติเมื่อผู้เล่นเข้าสู่ระบบด้วย Discord และลงทะเบียนตัวละคร FiveM เข้าสู่บ้านฮัฟเฟิลพัฟสำเร็จ
+          </p>
+        </div>
+      ) : viewMode === 'grouped' && selectedRoleFilter === 'All' ? (
         /* GROUPED BY ROLE HIERARCHY */
         <div className="space-y-8">
           {ROLE_GROUPS.map((group) => {

@@ -15,6 +15,7 @@ export type HouseRole =
   | 'นักกีฬา SAS';
 
 export interface StudentProfile {
+  discordId?: string;
   name: string;
   studentId: string;
   year: number; // 1 - 7
@@ -46,6 +47,8 @@ export interface HousePoints {
   ravenclaw: number;
 }
 
+export type AnnouncementCategory = 'ข่าวสารสำคัญ' | 'กิจกรรม' | 'การเรียน' | 'ฝึกซ้อม' | 'อื่นๆ';
+
 export interface HouseAnnouncement {
   id: string;
   title: string;
@@ -53,17 +56,20 @@ export interface HouseAnnouncement {
   author: string;
   role: string;
   date: string;
-  category: 'ข่าวสารสำคัญ' | 'กิจกรรม Roleplay' | 'กฎระเบียบบ้าน' | 'ประกาศฝึกซ้อม';
+  category: AnnouncementCategory;
   pinned?: boolean;
 }
 
+export type EventCategory = 'ประชุม' | 'กีฬา' | 'การเรียน' | 'คาบพิเศษ' | 'กิจกรรม' | 'อื่นๆ';
+
 export interface HouseEvent {
   id: string;
+  date?: string; // Format: YYYY-MM-DD
   timeIrl: string;
   timeRp: string;
   title: string;
   location: string;
-  category: 'meeting' | 'quidditch' | 'class' | 'duel';
+  category: EventCategory;
   dateLabel: string;
 }
 
@@ -86,9 +92,9 @@ export interface SpellItem {
   id: string;
   name: string;
   category: SpellCategory;
-  tiers: number; // จำนวนขั้น (1 - 5)
-  minYear: number; // ชั้นปีที่เรียนได้
-  slashCommand: string;
+  tiers?: number; // จำนวนขั้น (1 - 5)
+  minYear?: number; // ชั้นปีที่เรียนได้
+  slashCommand?: string;
   description: string;
   effect: string;
   cooldown?: string;

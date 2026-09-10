@@ -103,20 +103,10 @@ export const SpellsLoreTab: React.FC<SpellsLoreTabProps> = ({
     const matchesSearch =
       spell.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       spell.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      spell.slashCommand.toLowerCase().includes(searchQuery.toLowerCase()) ||
       spell.effect.toLowerCase().includes(searchQuery.toLowerCase());
 
-    return matchesCat && matchesYear && matchesPossession && matchesSearch;
+    return matchesCat && matchesPossession && matchesSearch;
   });
-
-  const handleCopyCommand = (spell: SpellItem, e: React.MouseEvent) => {
-    e.stopPropagation();
-    navigator.clipboard.writeText(spell.slashCommand);
-    setCopiedId(spell.id);
-    setTimeout(() => {
-      setCopiedId(null);
-    }, 2000);
-  };
 
   const handleTogglePossession = (spellId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -309,32 +299,12 @@ export const SpellsLoreTab: React.FC<SpellsLoreTabProps> = ({
             })}
           </div>
 
-          {/* Year Filter Pills */}
-          <div className="flex items-center gap-2 flex-wrap text-xs text-neutral-400">
-            <span className="flex items-center gap-1 text-neutral-400">
-              <SlidersHorizontal className="w-3.5 h-3.5 text-[#FEE101]" />
-              <span>ชั้นปีที่อนุญาต:</span>
+          {/* Spells Count */}
+          <div className="flex items-center justify-between text-xs text-neutral-400">
+            <span className="text-neutral-400">
+              หมวดหมู่คาถา: <strong className="text-[#FEE101]">{selectedCategory === 'All' ? 'ทั้งหมด' : selectedCategory}</strong>
             </span>
-            <button
-              onClick={() => setSelectedYear('All')}
-              className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer ${
-                selectedYear === 'All' ? 'bg-[#FEE101]/20 text-[#FEE101] font-semibold' : 'hover:text-white'
-              }`}
-            >
-              ทุกชั้นปี
-            </button>
-            {[1, 2, 3, 4, 5, 6, 7].map((y) => (
-              <button
-                key={y}
-                onClick={() => setSelectedYear(y)}
-                className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer ${
-                  selectedYear === y ? 'bg-[#FEE101]/20 text-[#FEE101] font-semibold' : 'hover:text-white'
-                }`}
-              >
-                ปี {y}
-              </button>
-            ))}
-            <span className="ml-auto text-neutral-500 text-[11px]">
+            <span className="text-neutral-400">
               แสดง {filteredSpells.length} จากทั้งหมด {spellsData.length} คาถา
             </span>
           </div>
@@ -342,7 +312,6 @@ export const SpellsLoreTab: React.FC<SpellsLoreTabProps> = ({
           {/* Spells Cards Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {filteredSpells.map((spell) => {
-              const isCopied = copiedId === spell.id;
               const isPossessed = userPossessedSpells.includes(spell.id);
               const possessors = getMembersWithSpell(spell.id);
 
@@ -376,9 +345,6 @@ export const SpellsLoreTab: React.FC<SpellsLoreTabProps> = ({
                         <h3 className="font-cinzel text-lg font-bold text-amber-50 group-hover:text-[#FEE101] transition-colors">
                           {spell.name}
                         </h3>
-                        <p className="text-[11px] text-neutral-400">
-                          ระดับชั้นปี: <strong className="text-amber-200">ปี {spell.minYear}+</strong>
-                        </p>
                       </div>
 
                       {/* Possession Toggle Button (Explicit User Requirement) */}
@@ -405,13 +371,10 @@ export const SpellsLoreTab: React.FC<SpellsLoreTabProps> = ({
                       </button>
                     </div>
 
-                    {/* Badges: Category & Tiers */}
+                    {/* Badges: Category & Member count */}
                     <div className="flex items-center gap-2 mb-3">
-                      <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full border ${getCategoryBadge(spell.category)}`}>
+                      <span className={`text-[10px] uppercase font-bold px-2.5 py-0.5 rounded-full border ${getCategoryBadge(spell.category)}`}>
                         {spell.category}
-                      </span>
-                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-neutral-900 border border-neutral-700 text-amber-300">
-                        {spell.tiers} ขั้นวิชา
                       </span>
 
                       {/* Possessor members count pill */}
@@ -420,7 +383,7 @@ export const SpellsLoreTab: React.FC<SpellsLoreTabProps> = ({
                           e.stopPropagation();
                           setViewingPossessorsSpell(spell);
                         }}
-                        className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 text-neutral-300 flex items-center gap-1 transition-colors"
+                        className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 text-neutral-300 flex items-center gap-1 transition-colors cursor-pointer"
                         title="ดูว่ามีสมาชิกบ้านคนไหนครอบครองคาถานี้บ้าง"
                       >
                         <Users className="w-3 h-3 text-[#FEE101]" />
@@ -434,39 +397,10 @@ export const SpellsLoreTab: React.FC<SpellsLoreTabProps> = ({
                     </p>
 
                     {/* Effect */}
-                    <div className="p-2.5 rounded-xl bg-[#0d0d10] border border-neutral-800/80 text-[11px] text-neutral-300 mb-4 flex items-start gap-2">
+                    <div className="p-2.5 rounded-xl bg-[#0d0d10] border border-neutral-800/80 text-[11px] text-neutral-300 flex items-start gap-2">
                       <Zap className="w-3.5 h-3.5 text-[#FEE101] flex-shrink-0 mt-0.5" />
                       <span className="line-clamp-2">{spell.effect}</span>
                     </div>
-                  </div>
-
-                  {/* FiveM Slash Command Box with Copy Button */}
-                  <div className="pt-3 border-t border-neutral-800/80 flex items-center justify-between gap-2">
-                    <code className="text-xs text-amber-300 font-mono bg-black/40 px-2.5 py-1 rounded-md border border-neutral-800 truncate select-all">
-                      {spell.slashCommand}
-                    </code>
-
-                    <button
-                      onClick={(e) => handleCopyCommand(spell, e)}
-                      title="คัดลอกคำสั่ง Slash Command ไปใช้ใน FiveM"
-                      className={`p-1.5 rounded-lg border transition-all flex items-center gap-1 text-[11px] flex-shrink-0 cursor-pointer ${
-                        isCopied
-                          ? 'bg-emerald-950 border-emerald-500 text-emerald-300'
-                          : 'bg-neutral-800 hover:bg-neutral-700 border-neutral-700 text-neutral-300 hover:text-white'
-                      }`}
-                    >
-                      {isCopied ? (
-                        <>
-                          <Check className="w-3.5 h-3.5 text-emerald-400" />
-                          <span>Copied!</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-3.5 h-3.5" />
-                          <span>คัดลอก</span>
-                        </>
-                      )}
-                    </button>
                   </div>
                 </div>
               );
@@ -586,14 +520,11 @@ export const SpellsLoreTab: React.FC<SpellsLoreTabProps> = ({
             <div className="flex items-start justify-between gap-3 mb-4">
               <div>
                 <span className={`text-[11px] uppercase font-bold px-2.5 py-0.5 rounded-full border ${getCategoryBadge(castingSpell.category)}`}>
-                  {castingSpell.category} • {castingSpell.tiers} ขั้นวิชา
+                  {castingSpell.category}
                 </span>
                 <h3 className="font-cinzel text-2xl font-black text-[#FEE101] mt-2">
                   {castingSpell.name}
                 </h3>
-                <p className="text-xs text-neutral-400">
-                  ระดับชั้นปีที่สามารถเรียนได้: ชั้นปีที่ {castingSpell.minYear} ขึ้นไป
-                </p>
               </div>
 
               <button
@@ -650,26 +581,6 @@ export const SpellsLoreTab: React.FC<SpellsLoreTabProps> = ({
                 <p className="text-xs sm:text-sm text-neutral-200 leading-relaxed">
                   {castingSpell.effect}
                 </p>
-              </div>
-
-              {/* Slash command in-game */}
-              <div className="p-3.5 rounded-2xl bg-[#0a0a0c] border border-neutral-800 flex items-center justify-between gap-2">
-                <div>
-                  <p className="text-[10px] text-neutral-400 uppercase tracking-wider">
-                    FiveM In-Game Command
-                  </p>
-                  <code className="text-sm font-mono text-[#FEE101] font-bold">
-                    {castingSpell.slashCommand}
-                  </code>
-                </div>
-
-                <button
-                  onClick={(e) => handleCopyCommand(castingSpell, e)}
-                  className="px-3 py-1.5 rounded-xl text-xs bg-[#FEE101] text-neutral-950 font-bold hover:bg-[#ffe73d] transition-all flex items-center gap-1 cursor-pointer"
-                >
-                  <Copy className="w-3.5 h-3.5" />
-                  <span>Copy Command</span>
-                </button>
               </div>
             </div>
 

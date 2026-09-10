@@ -1,6 +1,6 @@
 {
   "name": "Remix Hufflepuff Hogworlds",
-  "description": "ระบบจัดการข้อมูลบ้านฮัฟเฟิลพัฟ Hogworlds",
+  "description": "ระบบจัดการข้อมูลบ้านฮัฟเฟิลพัฟ Hogworlds เชื่อมต่อฐานข้อมูล Firebase Hufflepuff Hogworlds",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"

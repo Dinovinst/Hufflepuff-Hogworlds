@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   AppView, 
   StudentProfile, 
@@ -14,20 +14,32 @@ import {
   INITIAL_MEMBERS, 
   INITIAL_SCHEDULE, 
   INITIAL_STUDENT_PROFILE,
-  INITIAL_STUDENT_USER_PROFILE
 } from './data/hufflepuffData';
 
 import { LandingView } from './components/LandingView';
-import { RegistrationView } from './components/RegistrationView';
+import { RegistrationView, DiscordAuthUser } from './components/RegistrationView';
 import { HouseNavbar } from './components/HouseNavbar';
 import { HouseDashboardView } from './components/HouseDashboardView';
 import { EducationCenterView } from './components/EducationCenterView';
 import { MembersDirectoryTab } from './components/MembersDirectoryTab';
+import { 
+  subscribeToMembers, 
+  subscribeToAnnouncements, 
+  subscribeToSchedules, 
+  getUserProfileFromFirestore, 
+  saveUserProfileToFirestore, 
+  saveAnnouncementToFirestore, 
+  deleteAnnouncementFromFirestore, 
+  saveScheduleToFirestore, 
+  deleteScheduleFromFirestore 
+} from './lib/hufflepuffFirestore';
 
 export default function App() {
   const [currentView, setCurrentView] = useState<AppView>('landing');
   const [userStatus, setUserStatus] = useState<UserStatus>('guest');
   const [userProfile, setUserProfile] = useState<StudentProfile>(INITIAL_STUDENT_PROFILE);
+  const [activeDiscordUser, setActiveDiscordUser] = useState<DiscordAuthUser | null>(null);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
 
   // App state
   const [announcements, setAnnouncements] = useState<HouseAnnouncement[]>(INITIAL_ANNOUNCEMENTS);
@@ -36,64 +48,163 @@ export default function App() {
   const [spellsData] = useState(ALL_SPELLS_DATA);
   const [membersData, setMembersData] = useState(INITIAL_MEMBERS);
 
+  // Real-time subscriptions to Firebase Firestore (Hufflepuff Hogworlds database)
+  useEffect(() => {
+    // 1. Subscribe to registered members in Firestore
+    const unsubMembers = subscribeToMembers((updatedMembers) => {
+      setMembersData(updatedMembers);
+    });
+
+    // 2. Subscribe to announcements in Firestore
+    const unsubAnnouncements = subscribeToAnnouncements((updatedAnnouncements) => {
+      setAnnouncements(updatedAnnouncements);
+    });
+
+    // 3. Subscribe to schedules in Firestore
+    const unsubSchedules = subscribeToSchedules((updatedSchedules) => {
+      setScheduleData(updatedSchedules);
+    });
+
+    // 4. Restore saved login session from Firebase Firestore
+    const savedDiscordId = localStorage.getItem('hufflepuff_user_id');
+    if (savedDiscordId) {
+      getUserProfileFromFirestore(savedDiscordId)
+        .then((profile) => {
+          if (profile) {
+            setUserProfile(profile);
+            setUserStatus('approved');
+            setCurrentView('dashboard');
+          } else {
+            // Check fallback server database
+            fetch(`/api/users/${savedDiscordId}`)
+              .then((res) => (res.ok ? res.json() : null))
+              .then((data) => {
+                if (data?.user) {
+                  setUserProfile(data.user);
+                  setUserStatus('approved');
+                  setCurrentView('dashboard');
+                }
+              })
+              .catch(() => {
+                localStorage.removeItem('hufflepuff_user_id');
+              });
+          }
+        })
+        .catch(() => {
+          localStorage.removeItem('hufflepuff_user_id');
+        });
+    }
+
+    return () => {
+      unsubMembers();
+      unsubAnnouncements();
+      unsubSchedules();
+    };
+  }, []);
+
+  // Handlers for Firestore Announcement updates
+  const handleUpdateAnnouncements = (newList: HouseAnnouncement[]) => {
+    setAnnouncements(newList);
+    const currentIds = new Set(newList.map((a) => a.id));
+    for (const prev of announcements) {
+      if (!currentIds.has(prev.id)) {
+        deleteAnnouncementFromFirestore(prev.id).catch((err) =>
+          console.warn('Delete announcement firestore warning:', err)
+        );
+      }
+    }
+    for (const item of newList) {
+      saveAnnouncementToFirestore(item).catch((err) =>
+        console.warn('Save announcement firestore warning:', err)
+      );
+    }
+  };
+
+  // Handlers for Firestore Schedule updates
+  const handleUpdateSchedule = (newList: ClassScheduleItem[]) => {
+    setScheduleData(newList);
+    const currentIds = new Set(newList.map((s) => s.id));
+    for (const prev of scheduleData) {
+      if (!currentIds.has(prev.id)) {
+        deleteScheduleFromFirestore(prev.id).catch((err) =>
+          console.warn('Delete schedule firestore warning:', err)
+        );
+      }
+    }
+    for (const item of newList) {
+      saveScheduleToFirestore(item).catch((err) =>
+        console.warn('Save schedule firestore warning:', err)
+      );
+    }
+  };
+
   // Handlers
-  const handleLoginDiscord = () => {
+  const handleDiscordLoginSuccess = (profile: StudentProfile) => {
+    setUserProfile(profile);
+    setUserStatus('approved');
+    if (profile.discordId) {
+      localStorage.setItem('hufflepuff_user_id', profile.discordId);
+    }
+    setCurrentView('dashboard');
+  };
+
+  const handleNeedRegistration = (discordUser: DiscordAuthUser) => {
+    setActiveDiscordUser(discordUser);
+    setIsEditingProfile(false);
     setCurrentView('register');
-  };
-
-  const handleExploreDemo = () => {
-    setUserStatus('approved');
-    setUserProfile(INITIAL_STUDENT_USER_PROFILE);
-    setCurrentView('dashboard');
-  };
-
-  const handleExploreAdminDemo = () => {
-    setUserStatus('approved');
-    setUserProfile(INITIAL_STUDENT_PROFILE);
-    setCurrentView('dashboard');
   };
 
   const handleToggleAdminRole = () => {
     setUserProfile((prev) => {
-      const isCurrentlyAdmin = prev.houseRole === 'แอดมิน' || (prev.houseRoles && prev.houseRoles.includes('แอดมิน'));
+      const isCurrentlyAdmin =
+        prev.houseRole === 'แอดมิน' || (prev.houseRoles && prev.houseRoles.includes('แอดมิน'));
+      let updatedRoles: HouseRole[];
+      let updatedPrimaryRole: HouseRole;
+
       if (isCurrentlyAdmin) {
         const remaining = (prev.houseRoles || []).filter((r) => r !== 'แอดมิน');
-        const fallback = remaining.length > 0 ? remaining : (['นักเรียนทั่วไป'] as HouseRole[]);
-        return {
-          ...prev,
-          houseRole: fallback[0],
-          houseRoles: fallback,
-        };
+        updatedRoles = remaining.length > 0 ? remaining : (['นักเรียนทั่วไป'] as HouseRole[]);
+        updatedPrimaryRole = updatedRoles[0];
       } else {
         const existing = prev.houseRoles || [prev.houseRole];
-        return {
-          ...prev,
-          houseRole: 'แอดมิน',
-          houseRoles: ['แอดมิน', ...existing.filter((r) => r !== 'แอดมิน')],
-        };
+        updatedRoles = ['แอดมิน', ...existing.filter((r) => r !== 'แอดมิน')];
+        updatedPrimaryRole = 'แอดมิน';
       }
+
+      const updated: StudentProfile = {
+        ...prev,
+        houseRole: updatedPrimaryRole,
+        houseRoles: updatedRoles,
+      };
+
+      // Persist to Firebase Firestore
+      if (updated.discordId) {
+        saveUserProfileToFirestore(updated).catch((err) =>
+          console.warn('Failed to sync role to Firestore:', err)
+        );
+        fetch(`/api/users/${prev.discordId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            houseRole: updatedPrimaryRole,
+            houseRoles: updatedRoles,
+          }),
+        }).catch((err) => console.error('Failed to sync role to server:', err));
+      }
+
+      return updated;
     });
   };
 
   const handleRegistrationSuccess = (newProfile: StudentProfile) => {
     setUserProfile(newProfile);
     setUserStatus('approved');
-    // Add to members directory as well
-    setMembersData((prev) => [
-      {
-        id: `mem-${Date.now()}`,
-        name: newProfile.name,
-        studentId: newProfile.studentId,
-        year: newProfile.year,
-        role: newProfile.houseRole,
-        roles: newProfile.houseRoles || [newProfile.houseRole],
-        avatar: newProfile.characterPhoto,
-        status: 'online',
-        specialty: newProfile.bio || 'สมาชิกใหม่บ้านฮัฟเฟิลพัฟ Hogworlds Wizardry Project',
-        possessedSpells: newProfile.possessedSpells || [],
-      },
-      ...prev,
-    ]);
+    if (newProfile.discordId) {
+      localStorage.setItem('hufflepuff_user_id', newProfile.discordId);
+      saveUserProfileToFirestore(newProfile).catch((err) =>
+        console.warn('Failed to save user profile to Firestore:', err)
+      );
+    }
     setCurrentView('dashboard');
   };
 
@@ -104,6 +215,11 @@ export default function App() {
         ? current.filter((id) => id !== spellId)
         : [...current, spellId];
 
+      const updatedProfile: StudentProfile = {
+        ...prev,
+        possessedSpells: updated,
+      };
+
       // Sync with members data
       setMembersData((prevMembers) =>
         prevMembers.map((m) =>
@@ -113,14 +229,25 @@ export default function App() {
         )
       );
 
-      return {
-        ...prev,
-        possessedSpells: updated,
-      };
+      // Persist to Firebase Firestore
+      if (updatedProfile.discordId) {
+        saveUserProfileToFirestore(updatedProfile).catch((err) =>
+          console.warn('Failed to update possessed spells on Firestore:', err)
+        );
+        fetch(`/api/users/${prev.discordId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ possessedSpells: updated }),
+        }).catch((err) => console.error('Failed to update possessed spells on server:', err));
+      }
+
+      return updatedProfile;
     });
   };
 
   const handleLogout = () => {
+    localStorage.removeItem('hufflepuff_user_id');
+    setActiveDiscordUser(null);
     setUserStatus('guest');
     setCurrentView('landing');
   };
@@ -129,17 +256,20 @@ export default function App() {
   if (currentView === 'landing') {
     return (
       <LandingView
-        onLoginDiscord={handleLoginDiscord}
+        onLoginSuccess={handleDiscordLoginSuccess}
+        onNeedRegistration={handleNeedRegistration}
       />
     );
   }
 
-  // If on Registration page
+  // If on Registration or Edit Profile page
   if (currentView === 'register') {
     return (
       <RegistrationView
-        onBack={() => setCurrentView('landing')}
+        onBack={() => setCurrentView(isEditingProfile ? 'dashboard' : 'landing')}
         onSubmitSuccess={handleRegistrationSuccess}
+        discordUser={activeDiscordUser}
+        existingProfile={isEditingProfile ? userProfile : null}
       />
     );
   }
@@ -153,7 +283,10 @@ export default function App() {
         onNavigate={(view) => setCurrentView(view)}
         userProfile={userProfile}
         onLogout={handleLogout}
-        onEditProfile={() => setCurrentView('register')}
+        onEditProfile={() => {
+          setIsEditingProfile(true);
+          setCurrentView('register');
+        }}
         onToggleAdmin={handleToggleAdminRole}
       />
 
@@ -165,7 +298,7 @@ export default function App() {
             announcements={announcements}
             events={events}
             onNavigate={(view) => setCurrentView(view)}
-            onUpdateAnnouncements={setAnnouncements}
+            onUpdateAnnouncements={handleUpdateAnnouncements}
             onUpdateEvents={setEvents}
           />
         )}
@@ -174,7 +307,7 @@ export default function App() {
           <EducationCenterView
             initialTab={currentView}
             scheduleData={scheduleData}
-            onUpdateSchedule={setScheduleData}
+            onUpdateSchedule={handleUpdateSchedule}
             spellsData={spellsData}
             userProfile={userProfile}
             members={membersData}
@@ -196,7 +329,11 @@ export default function App() {
           <p>
             © Hogwarts School of Witchcraft and Wizardry • Hogworlds Wizardry Project Hufflepuff House
           </p>
-          <div className="flex items-center gap-4 text-neutral-400">
+          <div className="flex items-center gap-4 text-neutral-400 flex-wrap justify-center">
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber-500/10 border border-[#FEE101]/20 text-amber-300">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              Firebase: Hufflepuff Hogworlds
+            </span>
             <span>Helga Hufflepuff • Dedication, Patience & Loyalty</span>
             <span className="text-[#FEE101]">🟡⚫</span>
           </div>

@@ -103,7 +103,7 @@ export const INITIAL_ANNOUNCEMENTS: HouseAnnouncement[] = [
     author: 'Cedric Diggory',
     role: 'Prefect',
     date: 'เมื่อวานนี้',
-    category: 'กฎระเบียบบ้าน',
+    category: 'การเรียน',
     pinned: false,
   },
   {
@@ -113,7 +113,7 @@ export const INITIAL_ANNOUNCEMENTS: HouseAnnouncement[] = [
     author: 'Nymphadora Tonks',
     role: 'Badger Leader',
     date: '3 วันที่แล้ว',
-    category: 'กิจกรรม Roleplay',
+    category: 'กิจกรรม',
     pinned: false,
   },
 ];
@@ -121,38 +121,42 @@ export const INITIAL_ANNOUNCEMENTS: HouseAnnouncement[] = [
 export const INITIAL_EVENTS: HouseEvent[] = [
   {
     id: 'ev-1',
+    date: '2026-09-12',
     timeIrl: '19:00 น.',
     timeRp: '20:30 น. (In-Game)',
     title: 'รวมตัวประชุมบ้านที่ห้องนั่งเล่นรวม (Common Room)',
     location: 'ห้องนั่งเล่นรวม ข้างห้องครัวปราสาทฮอกวอตส์',
-    category: 'meeting',
+    category: 'ประชุม',
     dateLabel: 'วันนี้',
   },
   {
     id: 'ev-2',
+    date: '2026-09-12',
     timeIrl: '21:00 น.',
     timeRp: '22:00 น. (In-Game)',
     title: 'ซ้อมควิดดิช & ทักษะการบินไม้กวาด (Quidditch Training)',
     location: 'สนามควิดดิชฮอกวอตส์',
-    category: 'quidditch',
+    category: 'กีฬา',
     dateLabel: 'วันนี้',
   },
   {
     id: 'ev-3',
+    date: '2026-09-13',
     timeIrl: '20:00 น.',
     timeRp: '15:00 น. (In-Game)',
     title: 'คลาสเรียนพิเศษ: การสกัดพิษ Bubotuber & ปรุงยาขั้นสูง',
     location: 'เรือนกระจกหมายเลข 3 & ห้องใต้ดินปรุงยา',
-    category: 'class',
+    category: 'คาบพิเศษ',
     dateLabel: 'พรุ่งนี้',
   },
   {
     id: 'ev-4',
+    date: '2026-09-14',
     timeIrl: '22:30 น.',
     timeRp: '23:30 น. (In-Game)',
     title: 'ประลองเวทย์กระชับมิตรระหว่างบ้าน (House Dueling League)',
     location: 'ลานประลองเวทย์ Great Hall',
-    category: 'duel',
+    category: 'กิจกรรม',
     dateLabel: 'เสาร์นี้',
   },
 ];
@@ -1107,154 +1111,5 @@ export const ALL_SPELLS_DATA: SpellItem[] = [
   },
 ];
 
-export const INITIAL_MEMBERS: DirectoryMember[] = [
-  {
-    id: 'mem-1',
-    name: 'Cedric Diggory',
-    studentId: '123456',
-    year: 6,
-    role: 'Prefect',
-    roles: ['Prefect', 'Badger วิชาการ', 'นักกีฬาประลองเวทย์'],
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&auto=format&fit=crop&q=80',
-    status: 'in-game',
-    specialty: 'ซีกเกอร์กัปตันทีม & การประลองเวทย์',
-    possessedSpells: [
-      'sp-accio', 'sp-aguamenti', 'sp-alohomora', 'sp-lumos', 'sp-stupefy', 
-      'sp-protego', 'sp-potio-virae', 'sp-expelliarmus', 'sp-revelio', 
-      'sp-reparifarge', 'sp-scourgify', 'sp-bombarda', 'sp-episkey', 'sp-rennervate'
-    ],
-  },
-  {
-    id: 'mem-2',
-    name: 'Pomona Sprout',
-    studentId: '100001',
-    year: 7,
-    role: 'ศาสตราจารย์ประจำบ้าน',
-    roles: ['ศาสตราจารย์ประจำบ้าน', 'หัวหน้าบ้าน', 'แอดมิน'],
-    avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=200&auto=format&fit=crop&q=80',
-    status: 'online',
-    specialty: 'ผู้เชี่ยวชาญสมุนไพรศาสตร์และพืชวิเศษ (อาจารย์ที่ปรึกษาบ้าน)',
-    possessedSpells: [
-      'sp-accio', 'sp-aguamenti', 'sp-alohomora', 'sp-lumos', 'sp-nox', 'sp-stupefy',
-      'sp-protego', 'sp-potio-virae', 'sp-expelliarmus', 'sp-revelio', 'sp-incendio',
-      'sp-diffindo', 'sp-glisseo', 'sp-episkey', 'sp-vulnera', 'sp-rennervate', 'sp-finite'
-    ],
-  },
-  {
-    id: 'mem-3',
-    name: 'Hannah Abbott',
-    studentId: '123457',
-    year: 5,
-    role: 'Prefect',
-    roles: ['Prefect', 'Helper'],
-    avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&auto=format&fit=crop&q=80',
-    status: 'online',
-    specialty: 'ปรุงยาบำรุง และสมุนไพรบำบัด',
-    possessedSpells: [
-      'sp-accio', 'sp-alohomora', 'sp-lumos', 'sp-episkey', 'sp-potio-virae', 
-      'sp-vulnera', 'sp-rennervate', 'sp-finite', 'sp-protego'
-    ],
-  },
-  {
-    id: 'mem-4',
-    name: 'Ernie Macmillan',
-    studentId: '123458',
-    year: 5,
-    role: 'Badger วิชาการ',
-    roles: ['Badger วิชาการ', 'Helper'],
-    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&auto=format&fit=crop&q=80',
-    status: 'in-game',
-    specialty: 'วิชาประวัติศาสตร์เวทมนตร์ & ผู้ประสานงานตารางเรียน',
-    possessedSpells: [
-      'sp-accio', 'sp-alohomora', 'sp-lumos', 'sp-stupefy', 'sp-expelliarmus', 
-      'sp-petrificus', 'sp-protego', 'sp-revelio', 'sp-reparifarge'
-    ],
-  },
-  {
-    id: 'mem-5',
-    name: 'Susan Bones',
-    studentId: '123459',
-    year: 5,
-    role: 'Badger กิจกรรม',
-    roles: ['Badger กิจกรรม', 'นักกีฬาไม้กวาด'],
-    avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200&auto=format&fit=crop&q=80',
-    status: 'offline',
-    specialty: 'เชสเซอร์ควิดดิช & ทักษะบินไม้กวาด',
-    possessedSpells: [
-      'sp-lumos', 'sp-nox', 'sp-accio', 'sp-stupefy', 'sp-arresto-momentum', 'sp-protego'
-    ],
-  },
-  {
-    id: 'mem-6',
-    name: 'Justin Finch-Fletchley',
-    studentId: '123460',
-    year: 5,
-    role: 'Badger แข่งขัน',
-    roles: ['Badger แข่งขัน', 'นักกีฬาประลองเวทย์'],
-    avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&auto=format&fit=crop&q=80',
-    status: 'in-game',
-    specialty: 'ประลองเวทย์ดูเอลลิ่ง & คาถาสกัดกั้นสายบุก',
-    possessedSpells: [
-      'sp-accio', 'sp-stupefy', 'sp-expelliarmus', 'sp-bombarda', 'sp-diffindo', 
-      'sp-incendio', 'sp-protego', 'sp-petrificus'
-    ],
-  },
-  {
-    id: 'mem-7',
-    name: 'Nymphadora Tonks',
-    studentId: '100002',
-    year: 7,
-    role: 'Badger Leader',
-    roles: ['Badger Leader', 'แอดมิน', 'นักกีฬา SAS'],
-    avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=200&auto=format&fit=crop&q=80',
-    status: 'online',
-    specialty: 'หัวหน้าทีมยุทธวิธี ป้องกันตัว SAS & การแปลงกาย',
-    possessedSpells: [
-      'sp-accio', 'sp-aguamenti', 'sp-alohomora', 'sp-lumos', 'sp-nox', 'sp-stupefy', 
-      'sp-protego', 'sp-expelliarmus', 'sp-confundo', 'sp-silencio', 'sp-reducto', 
-      'sp-bombarda', 'sp-inanimatus-conjurus', 'sp-sectumsempra', 'sp-crucio'
-    ],
-  },
-  {
-    id: 'mem-8',
-    name: 'Edward Lupin',
-    studentId: '123461',
-    year: 2,
-    role: 'นักกีฬาประลองเวทย์',
-    roles: ['นักกีฬาประลองเวทย์', 'นักเรียนทั่วไป'],
-    avatar: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=200&auto=format&fit=crop&q=80',
-    status: 'in-game',
-    specialty: 'ยิงคาถา Stupefy แม่นยำ & ความคล่องตัวสูง',
-    possessedSpells: [
-      'sp-lumos', 'sp-alohomora', 'sp-flipendo', 'sp-stupefy', 'sp-expelliarmus'
-    ],
-  },
-  {
-    id: 'mem-9',
-    name: 'Leanne Wood',
-    studentId: '123462',
-    year: 4,
-    role: 'นักกีฬาเชียร์ลีดเดอร์',
-    roles: ['นักกีฬาเชียร์ลีดเดอร์', 'Helper'],
-    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
-    status: 'online',
-    specialty: 'เชียร์ลีดเดอร์และฝ่ายสันทนาการบ้านฮัฟเฟิลพัฟ',
-    possessedSpells: [
-      'sp-lumos', 'sp-nox', 'sp-cheering-charm', 'sp-orchestrus', 'sp-cantis'
-    ],
-  },
-  {
-    id: 'mem-10',
-    name: 'Zacharias Smith',
-    studentId: '123463',
-    year: 5,
-    role: 'นักกีฬาไม้กวาด',
-    roles: ['นักกีฬาไม้กวาด', 'นักเรียนทั่วไป'],
-    avatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=200&auto=format&fit=crop&q=80',
-    status: 'offline',
-    specialty: 'เชสเซอร์ตัวรุกทีมควิดดิชประจำบ้าน',
-    possessedSpells: [
-      'sp-lumos', 'sp-accio', 'sp-stupefy', 'sp-arresto-momentum'
-    ],
-  },
-];
+export const INITIAL_MEMBERS: DirectoryMember[] = [];
+

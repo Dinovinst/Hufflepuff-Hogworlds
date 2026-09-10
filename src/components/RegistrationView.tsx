@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { HufflepuffCrest } from './HufflepuffCrest';
 import { HOUSE_ROLES_LIST, DEFAULT_DISCORD_USER } from '../data/hufflepuffData';
 import { HouseRole, StudentProfile } from '../types';
+import { saveUserProfileToFirestore } from '../lib/hufflepuffFirestore';
 import { 
   Upload, 
   CheckCircle2, 
@@ -15,32 +16,67 @@ import {
   Image as ImageIcon,
   Check,
   AlertCircle,
-  ShieldCheck
+  ShieldCheck,
+  Database
 } from 'lucide-react';
+
+export interface DiscordAuthUser {
+  id: string;
+  username: string;
+  global_name?: string;
+  avatar: string;
+  email?: string;
+}
 
 interface RegistrationViewProps {
   onBack: () => void;
   onSubmitSuccess: (profile: StudentProfile) => void;
+  discordUser?: DiscordAuthUser | null;
+  existingProfile?: StudentProfile | null;
 }
 
 export const RegistrationView: React.FC<RegistrationViewProps> = ({
   onBack,
   onSubmitSuccess,
+  discordUser,
+  existingProfile,
 }) => {
-  // Form fields
-  const [characterName, setCharacterName] = useState('Cedric Diggory');
-  const [studentId, setStudentId] = useState('123456');
-  const [year, setYear] = useState<number>(6);
+  const isEditing = Boolean(existingProfile);
+
+  // Active Discord identity
+  const currentDiscord = discordUser || {
+    id: existingProfile?.discordId || DEFAULT_DISCORD_USER.id,
+    username: existingProfile?.discordUsername || `${DEFAULT_DISCORD_USER.name}${DEFAULT_DISCORD_USER.tag}`,
+    global_name: existingProfile?.name || DEFAULT_DISCORD_USER.name,
+    avatar: existingProfile?.discordAvatar || DEFAULT_DISCORD_USER.avatar,
+  };
+
+  // Form fields (initialized from existingProfile if editing)
+  const [characterName, setCharacterName] = useState(existingProfile?.name || '');
+  const [studentId, setStudentId] = useState(existingProfile?.studentId || '');
+  const [year, setYear] = useState<number>(existingProfile?.year || 1);
   // Multiple roles selection
-  const [selectedRoles, setSelectedRoles] = useState<HouseRole[]>(['แอดมิน', 'Badger วิชาการ']);
-  const [characterPhoto, setCharacterPhoto] = useState<string>('https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&auto=format&fit=crop&q=80');
-  const [bio, setBio] = useState('นักเรียนบ้านฮัฟเฟิลพัฟ มุ่งมั่นพัฒนาทักษะเวทมนตร์และช่วยเหลือเพื่อนสมาชิกทุกคน');
+  const [selectedRoles, setSelectedRoles] = useState<HouseRole[]>(
+    existingProfile?.houseRoles && existingProfile.houseRoles.length > 0
+      ? existingProfile.houseRoles
+      : existingProfile?.houseRole
+      ? [existingProfile.houseRole]
+      : ['นักเรียนทั่วไป']
+  );
+  const [characterPhoto, setCharacterPhoto] = useState<string>(
+    existingProfile?.characterPhoto || currentDiscord.avatar || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&auto=format&fit=crop&q=80'
+  );
+  const [bio, setBio] = useState(
+    existingProfile?.bio || 'นักเรียนบ้านฮัฟเฟิลพัฟ มุ่งมั่นพัฒนาทักษะเวทมนตร์และช่วยเหลือเพื่อนสมาชิกทุกคน'
+  );
 
   // Drag & drop state
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Status Modal
+  // Status Modal & Server State
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [serverError, setServerError] = useState<string>('');
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [submittedProfile, setSubmittedProfile] = useState<StudentProfile | null>(null);
 
@@ -101,8 +137,9 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setServerError('');
     const newErrors: { [key: string]: string } = {};
 
     if (!characterName.trim()) {
@@ -123,23 +160,76 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
       return;
     }
 
-    const profile: StudentProfile = {
-      name: characterName,
-      studentId,
+    setIsSubmitting(true);
+
+    const profilePayload = {
+      discordId: currentDiscord.id,
+      name: characterName.trim(),
+      studentId: studentId.trim(),
       year,
-      houseRole: selectedRoles[0] || 'สมาชิกบ้าน',
+      houseRole: selectedRoles[0] || 'นักเรียนทั่วไป',
       houseRoles: selectedRoles,
       characterPhoto,
-      discordUsername: `${DEFAULT_DISCORD_USER.name}${DEFAULT_DISCORD_USER.tag}`,
-      discordAvatar: DEFAULT_DISCORD_USER.avatar,
-      joinedDate: '10 กันยายน 2024',
+      discordUsername: currentDiscord.username,
+      discordAvatar: currentDiscord.avatar,
       bio,
-      pointsContributed: 25,
-      possessedSpells: ['Lumos', 'Nox', 'Alohomora', 'Wingardium Leviosa', 'Spongify'],
+      possessedSpells: existingProfile?.possessedSpells || ['Lumos', 'Nox', 'Alohomora', 'Wingardium Leviosa'],
     };
 
-    setSubmittedProfile(profile);
-    setShowSuccessModal(true);
+    try {
+      const endpoint = isEditing ? `/api/users/${currentDiscord.id}` : '/api/users';
+      const method = isEditing ? 'PUT' : 'POST';
+
+      const response = await fetch(endpoint, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(profilePayload),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        if (response.status === 409) {
+          setServerError(data.message || 'บัญชี Discord นี้ถูกใช้ลงทะเบียนไปแล้ว (1 บัญชี Discord สมัครได้ครั้งเดียว)');
+        } else {
+          setServerError(data.message || 'เกิดข้อผิดพลาดในการบันทึกข้อมูล');
+        }
+        setIsSubmitting(false);
+        return;
+      }
+
+      const savedUser = data.user || profilePayload;
+      const finalProfile: StudentProfile = {
+        discordId: savedUser.discordId,
+        name: savedUser.name,
+        studentId: savedUser.studentId,
+        year: savedUser.year,
+        houseRole: savedUser.houseRole,
+        houseRoles: savedUser.houseRoles,
+        characterPhoto: savedUser.characterPhoto,
+        discordUsername: savedUser.discordUsername,
+        discordAvatar: savedUser.discordAvatar,
+        joinedDate: savedUser.joinedDate || new Date().toLocaleDateString('th-TH'),
+        bio: savedUser.bio,
+        pointsContributed: savedUser.pointsContributed || 0,
+        possessedSpells: savedUser.possessedSpells || [],
+      };
+
+      // Save directly to Firebase Firestore (Hufflepuff Hogworlds database)
+      try {
+        await saveUserProfileToFirestore(finalProfile);
+      } catch (firestoreErr) {
+        console.warn('Firestore direct save warning (will sync):', firestoreErr);
+      }
+
+      setSubmittedProfile(finalProfile);
+      setShowSuccessModal(true);
+    } catch (err: any) {
+      console.error('Submit error:', err);
+      setServerError('ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้ กรุณาลองใหม่อีกครั้ง');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleProceedToDashboard = () => {
@@ -172,10 +262,12 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
               <span>Hogworlds Wizardry Project • FiveM Roleplay</span>
             </div>
             <h1 className="font-cinzel text-2xl sm:text-3xl font-bold text-amber-100">
-              ลงทะเบียนสมาชิกบ้านฮัฟเฟิลพัฟ
+              {isEditing ? 'แก้ไขข้อมูลส่วนตัวสมาชิกบ้านฮัฟเฟิลพัฟ' : 'ลงทะเบียนสมาชิกบ้านฮัฟเฟิลพัฟ'}
             </h1>
             <p className="text-xs sm:text-sm text-neutral-400 mt-1">
-              กรอกข้อมูลตัวละครในเกม FiveM SRP ให้ครบถ้วน เพื่อส่งให้ทีมงานตรวจสอบและรับสิทธิ์เข้าสู่ห้องนั่งเล่นรวม
+              {isEditing
+                ? 'แก้ไขข้อมูลตัวละครและบทบาทในเกม FiveM SRP (ผู้ใช้สามารถแก้ไขข้อมูลได้ตลอดเวลา)'
+                : 'กรอกข้อมูลตัวละครในเกม FiveM SRP ให้ครบถ้วน (1 บัญชี Discord สมัครได้ 1 ครั้ง)'}
             </p>
           </div>
         </div>
@@ -189,7 +281,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
                   <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515a.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0a12.64 12.64 0 0 0-.617-1.25a.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057a19.9 19.9 0 0 0 5.993 3.03a.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106a13.107 13.107 0 0 1-1.872-.892a.077.077 0 0 1-.008-.128a10.2 10.2 0 0 0 .372-.292a.074.074 0 0 1 .077-.01c3.929 1.793 8.18 1.793 12.061 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127a12.299 12.299 0 0 1-1.873.894a.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028a19.839 19.839 0 0 0 6.002-3.03a.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.028zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419c0-1.333.956-2.419 2.157-2.419c1.21 0 2.176 1.096 2.157 2.42c0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419c0-1.333.955-2.419 2.157-2.419c1.21 0 2.176 1.096 2.157 2.42c0 1.333-.946 2.418-2.157 2.418z"/>
                 </svg>
               </div>
-              <span className="text-sm font-semibold text-white">ลงทะเบียนเข้าสู่ระบบด้วย Discord</span>
+              <span className="text-sm font-semibold text-white">บัญชี Discord ที่เชื่อมต่อ</span>
             </div>
             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 whitespace-nowrap">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
@@ -201,7 +293,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
             <div className="flex items-center gap-3.5">
               <div className="relative flex-shrink-0">
                 <img
-                  src={DEFAULT_DISCORD_USER.avatar}
+                  src={currentDiscord.avatar}
                   alt="Discord Avatar"
                   className="w-11 h-11 rounded-full object-cover border-2 border-[#5865F2]"
                 />
@@ -210,25 +302,33 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-semibold text-white text-sm sm:text-base whitespace-nowrap">
-                    {DEFAULT_DISCORD_USER.name}
+                    {currentDiscord.global_name || currentDiscord.username}
                   </span>
                   <span className="text-neutral-400 text-xs font-mono px-2 py-0.5 rounded bg-neutral-900 border border-neutral-800 whitespace-nowrap">
-                    {DEFAULT_DISCORD_USER.tag}
+                    @{currentDiscord.username}
                   </span>
                 </div>
                 <p className="text-xs text-neutral-400 mt-0.5">
-                  ดึงข้อมูลบัญชีและเชื่อมต่ออัตโนมัติสำหรับการยืนยันตัวตน FiveM SRP
+                  เชื่อมโยงสิทธิ์บัญชี 1:1 กับระบบฐานข้อมูลบ้านฮัฟเฟิลพัฟ
                 </p>
               </div>
             </div>
 
             <div className="flex items-center gap-2 self-start sm:self-center">
               <span className="text-xs text-neutral-400 font-mono bg-neutral-900/80 px-2.5 py-1.5 rounded-lg border border-neutral-800 whitespace-nowrap">
-                ID: {DEFAULT_DISCORD_USER.id}
+                ID: {currentDiscord.id}
               </span>
             </div>
           </div>
         </div>
+
+        {/* Server Error Alert */}
+        {serverError && (
+          <div className="mb-6 p-4 rounded-xl bg-red-950/40 border border-red-500/40 flex items-start gap-3 text-red-200 text-sm">
+            <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+            <p>{serverError}</p>
+          </div>
+        )}
 
         {/* Registration Form */}
         <form onSubmit={handleSubmit} className="bg-[#141418] p-6 sm:p-8 rounded-2xl border border-[#FEE101]/20 space-y-6">
@@ -469,10 +569,20 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
             <button
               type="submit"
               id="btn-submit-application"
-              className="w-full py-3.5 px-6 rounded-xl font-semibold text-base text-neutral-950 bg-gradient-to-r from-[#FFF066] via-[#FEE101] to-[#D4A10B] hover:brightness-110 shadow-lg shadow-[#FEE101]/20 transition-all transform hover:-translate-y-0.5 active:translate-y-0 flex items-center justify-center gap-2 cursor-pointer"
+              disabled={isSubmitting}
+              className="w-full py-3.5 px-6 rounded-xl font-semibold text-base text-neutral-950 bg-gradient-to-r from-[#FFF066] via-[#FEE101] to-[#D4A10B] hover:brightness-110 shadow-lg shadow-[#FEE101]/20 transition-all transform hover:-translate-y-0.5 active:translate-y-0 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Sparkles className="w-5 h-5 text-neutral-950" />
-              <span>ลงทะเบียนสมาชิกบ้านฮัฟเฟิลพัฟ</span>
+              {isSubmitting ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-neutral-950 border-t-transparent rounded-full animate-spin" />
+                  <span>กำลังบันทึกข้อมูล...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-5 h-5 text-neutral-950" />
+                  <span>{isEditing ? 'บันทึกการแก้ไขข้อมูลสมาชิก' : 'ลงทะเบียนสมาชิกบ้านฮัฟเฟิลพัฟ'}</span>
+                </>
+              )}
             </button>
           </div>
         </form>
@@ -487,12 +597,12 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
             </div>
 
             <h3 className="font-cinzel text-xl sm:text-2xl font-bold text-[#FEE101] mb-2">
-              ส่งข้อมูลสำเร็จ!
+              {isEditing ? 'บันทึกข้อมูลสำเร็จ!' : 'ลงทะเบียนสำเร็จ!'}
             </h3>
 
             <p className="text-xs sm:text-sm text-neutral-300 leading-relaxed mb-6">
-              ระบบได้บันทึกข้อมูลการลงทะเบียนของ <strong className="text-amber-200">{characterName}</strong> (
-              รหัส {studentId}, ชั้นปีที่ {year}) เข้าสู่ระบบเรียบร้อยแล้ว
+              ระบบได้บันทึกข้อมูลของ <strong className="text-amber-200">{characterName}</strong> (
+              รหัส {studentId}, ชั้นปีที่ {year}) เข้าสู่ฐานข้อมูลบ้านฮัฟเฟิลพัฟเรียบร้อยแล้ว
             </p>
 
             {/* Quick Preview Card */}
@@ -510,7 +620,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
                     {selectedRoles.join(', ')}
                   </span>
                 </p>
-                <p className="text-neutral-500">Discord: {DEFAULT_DISCORD_USER.name}{DEFAULT_DISCORD_USER.tag}</p>
+                <p className="text-neutral-500">Discord: @{currentDiscord.username} (ID: {currentDiscord.id})</p>
               </div>
             </div>
 
