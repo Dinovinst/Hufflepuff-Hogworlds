@@ -136,7 +136,7 @@ function isDiscordOAuthConfigured(): boolean {
 app.get('/api/auth/discord/config', (req, res) => {
   const clientId = getDiscordClientId();
   const baseUrl = getBaseUrl(req);
-  const redirectUri = `${baseUrl}/auth/discord/callback`;
+  const redirectUri = `${baseUrl}/`;
   const isConfigured = isDiscordOAuthConfigured();
 
   res.json({
@@ -152,20 +152,20 @@ app.get('/api/auth/discord/config', (req, res) => {
 app.get('/api/auth/discord/url', (req, res) => {
   const clientId = getDiscordClientId();
   const baseUrl = getBaseUrl(req);
-  const reqRedirectUri = req.query.redirect_uri ? String(req.query.redirect_uri) : null;
-  const redirectUri = reqRedirectUri || `${baseUrl}/auth/discord/callback`;
 
   const isConfigured = isDiscordOAuthConfigured();
-  // When no valid client secret is configured, use 'token' (Implicit flow) so no client secret is required at all!
-  const responseType = isConfigured ? 'code' : 'token';
+  // Always use the Authorization Code flow. The Client Secret stays server-side.
+  // The registered Discord redirect URI for this project is the production site root.
+  const redirectUri = `${baseUrl}/`;
+  const state = req.query.state ? String(req.query.state) : '';
 
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUri,
-    response_type: responseType,
+    response_type: 'code',
     scope: 'identify',
-    prompt: 'consent',
   });
+  if (state) params.set('state', state);
 
   const authUrl = `https://discord.com/oauth2/authorize?${params.toString()}`;
 
@@ -174,7 +174,7 @@ app.get('/api/auth/discord/url', (req, res) => {
     clientId,
     url: authUrl,
     redirectUri,
-    responseType,
+    responseType: 'code',
     isSecretValid: isConfigured,
   });
 });
@@ -258,6 +258,79 @@ app.post('/api/auth/discord/identify', (req, res) => {
       avatar: avatar || (existing ? existing.discordAvatar : 'https://cdn.discordapp.com/embed/avatars/0.png'),
     },
   });
+});
+
+// Exchange a Discord authorization code for the authenticated Discord user.
+// Kept server-side so DISCORD_CLIENT_SECRET is never exposed to the browser.
+app.post('/api/auth/discord/exchange', async (req, res) => {
+  const code = typeof req.body?.code === 'string' ? req.body.code.trim() : '';
+  const clientId = getDiscordClientId();
+  const clientSecret = (process.env.DISCORD_CLIENT_SECRET || '').trim();
+
+  if (!clientSecret) {
+    return res.status(500).json({
+      message: 'ยังไม่ได้ตั้งค่า DISCORD_CLIENT_SECRET ใน Environment Variables',
+    });
+  }
+
+  if (!code) {
+    return res.status(400).json({ message: 'Discord authorization code is required' });
+  }
+
+  const redirectUri = `${getBaseUrl(req)}/`;
+
+  try {
+    const tokenResponse = await fetch('https://discord.com/api/v10/oauth2/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: redirectUri,
+      }),
+    });
+
+    const tokenData = await tokenResponse.json().catch(() => null);
+    if (!tokenResponse.ok || !tokenData?.access_token) {
+      console.error('[Discord OAuth] Token exchange failed:', tokenResponse.status, tokenData);
+      return res.status(401).json({
+        message: 'ไม่สามารถยืนยันตัวตนกับ Discord ได้ กรุณาลองเข้าสู่ระบบใหม่อีกครั้ง',
+      });
+    }
+
+    const userResponse = await fetch('https://discord.com/api/v10/users/@me', {
+      headers: { Authorization: `Bearer ${tokenData.access_token}` },
+    });
+    const discordUser = await userResponse.json().catch(() => null);
+
+    if (!userResponse.ok || !discordUser?.id) {
+      console.error('[Discord OAuth] User lookup failed:', userResponse.status, discordUser);
+      return res.status(401).json({
+        message: 'ไม่สามารถอ่านข้อมูลบัญชี Discord ได้ กรุณาลองเข้าสู่ระบบใหม่อีกครั้ง',
+      });
+    }
+
+    const avatar = discordUser.avatar
+      ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png?size=256`
+      : `https://cdn.discordapp.com/embed/avatars/${
+          Number.parseInt(discordUser.discriminator || '0', 10) % 5
+        }.png`;
+
+    return res.json({
+      user: {
+        id: discordUser.id,
+        username: discordUser.username,
+        global_name: discordUser.global_name || discordUser.username,
+        avatar,
+        email: discordUser.email || '',
+      },
+    });
+  } catch (error) {
+    console.error('[Discord OAuth] Unexpected exchange error:', error);
+    return res.status(500).json({ message: 'เกิดข้อผิดพลาดในการเชื่อมต่อกับ Discord' });
+  }
 });
 
 // Discord OAuth Callback Handler (Handles both Implicit 'token' flow and Server 'code' flow)

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "framework": "vite",
+  "functions": {
+    "api/auth/discord/exchange.ts": {
+      "runtime": "nodejs24.x"
+    },
+    "api/auth/discord/url.ts": {
+      "runtime": "nodejs24.x"
+    },
+    "api/auth/discord/config.ts": {
+      "runtime": "nodejs24.x"
+    }
+  }
+}
