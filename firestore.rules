@@ -7,8 +7,7 @@ service cloud.firestore {
 
     match /users/{discordId} {
       allow read: if true;
-      allow create, update: if isValidId(discordId);
-      allow delete: if false;
+      allow create, update, delete: if isValidId(discordId);
     }
 
     match /announcements/{announcementId} {

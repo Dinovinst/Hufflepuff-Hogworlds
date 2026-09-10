@@ -2,9 +2,25 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
+import { initializeApp, getApps } from 'firebase/app';
+import { getFirestore, doc, setDoc } from 'firebase/firestore';
 
 const app = express();
 const PORT = 3000;
+
+// Initialize Firebase Firestore for server-side persistence in Hufflepuff Hogworlds
+let serverDb: any = null;
+try {
+  const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
+  if (fs.existsSync(configPath)) {
+    const fbConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    const serverApp = getApps().length === 0 ? initializeApp(fbConfig) : getApps()[0];
+    serverDb = getFirestore(serverApp, fbConfig.firestoreDatabaseId);
+    console.log('Server connected to Firebase Firestore database:', fbConfig.firestoreDatabaseId);
+  }
+} catch (fbInitErr) {
+  console.warn('Server Firebase Firestore initialization warning:', fbInitErr);
+}
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
@@ -57,11 +73,29 @@ function loadUsers(): Record<string, StoredUser> {
   return {};
 }
 
-function saveUsers(users: Record<string, StoredUser>) {
+async function syncUserToFirestore(user: StoredUser) {
+  if (!serverDb || !user || !user.discordId) return;
+  try {
+    const userDocRef = doc(serverDb, 'users', user.discordId);
+    // Sanitize image payload if larger than 700KB to stay within Firestore limits
+    const safeUser = { ...user };
+    if (safeUser.characterPhoto && safeUser.characterPhoto.length > 700000) {
+      safeUser.characterPhoto = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&auto=format&fit=crop&q=80';
+    }
+    await setDoc(userDocRef, safeUser, { merge: true });
+  } catch (syncErr) {
+    console.warn(`[Firestore] Sync failed for ${user.discordId}:`, syncErr);
+  }
+}
+
+function saveUsers(users: Record<string, StoredUser>, modifiedUser?: StoredUser) {
   try {
     fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2), 'utf-8');
   } catch (err) {
     console.error('Failed to write users.json:', err);
+  }
+  if (modifiedUser) {
+    syncUserToFirestore(modifiedUser).catch(() => {});
   }
 }
 
@@ -482,7 +516,7 @@ app.post(['/api/users', '/api/register'], (req, res) => {
       updatedAt: new Date().toISOString(),
     };
     users[cleanDiscordId] = updatedUser;
-    saveUsers(users);
+    saveUsers(users, updatedUser);
     return res.status(200).json({
       message: 'อัปเดตข้อมูลตัวละครสำเร็จ',
       user: updatedUser,
@@ -507,7 +541,7 @@ app.post(['/api/users', '/api/register'], (req, res) => {
   };
 
   users[cleanDiscordId] = newUser;
-  saveUsers(users);
+  saveUsers(users, newUser);
 
   res.status(201).json({
     message: 'ลงทะเบียนสำเร็จ',
@@ -550,7 +584,7 @@ app.put('/api/users/:discordId', (req, res) => {
   };
 
   users[discordId] = updatedUser;
-  saveUsers(users);
+  saveUsers(users, updatedUser);
 
   res.json({
     message: 'อัปเดตข้อมูลผู้ใช้สำเร็จ',
@@ -581,7 +615,7 @@ app.post('/api/users/:discordId/roles', (req, res) => {
   };
 
   users[cleanId] = updatedUser;
-  saveUsers(users);
+  saveUsers(users, updatedUser);
 
   res.json({
     message: 'อัปเดตยศสมาชิกสำเร็จ',
