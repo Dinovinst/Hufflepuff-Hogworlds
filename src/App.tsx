@@ -103,6 +103,109 @@ export default function App() {
         });
     }
 
+    // 5. Handle Discord OAuth redirect callback (?code=... or #access_token=...)
+    const hash = window.location.hash.startsWith('#') ? window.location.hash.substring(1) : '';
+    const hashParams = new URLSearchParams(hash);
+    const accessToken = hashParams.get('access_token');
+
+    if (accessToken) {
+      window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+      fetch('https://discord.com/api/v10/users/@me', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      })
+        .then((res) => res.json())
+        .then(async (discordUser) => {
+          if (discordUser?.id) {
+            const avatarUrl = discordUser.avatar
+              ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png?size=256`
+              : `https://cdn.discordapp.com/embed/avatars/${parseInt(discordUser.discriminator || '0', 10) % 5}.png`;
+
+            const userPayload = {
+              id: discordUser.id,
+              username: discordUser.username,
+              global_name: discordUser.global_name || discordUser.username,
+              avatar: avatarUrl,
+              email: discordUser.email || '',
+            };
+
+            if (window.opener && window.opener !== window) {
+              window.opener.postMessage({ type: 'DISCORD_AUTH_SUCCESS', discordUser: userPayload }, '*');
+              setTimeout(() => window.close(), 400);
+            } else {
+              const profile = await getUserProfileFromFirestore(userPayload.id);
+              if (profile) {
+                handleDiscordLoginSuccess(profile);
+              } else {
+                handleNeedRegistration(userPayload);
+              }
+            }
+          }
+        })
+        .catch((err) => {
+          console.error('Failed to fetch Discord user from token:', err);
+        });
+    }
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const discordCode = urlParams.get('code');
+    if (discordCode) {
+      const isVercel = window.location.origin.includes('hufflepuffhogworlds.vercel.app');
+      const registeredRedirectUri = isVercel
+        ? 'https://hufflepuffhogworlds.vercel.app/'
+        : `${window.location.origin}/auth/discord/callback`;
+
+      // If running inside popup window, exchange and notify opener
+      if (window.opener && window.opener !== window) {
+        fetch('/api/auth/discord/exchange', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: discordCode, redirect_uri: registeredRedirectUri }),
+        })
+          .then((res) => res.json())
+          .then((data) => {
+            if (data?.user) {
+              window.opener.postMessage({ type: 'DISCORD_AUTH_SUCCESS', discordUser: data.user }, '*');
+              setTimeout(() => window.close(), 500);
+            } else {
+              window.opener.postMessage({ type: 'DISCORD_CODE_RECEIVED', code: discordCode }, '*');
+              setTimeout(() => window.close(), 1000);
+            }
+          })
+          .catch(() => {
+            window.opener.postMessage({ type: 'DISCORD_CODE_RECEIVED', code: discordCode }, '*');
+            setTimeout(() => window.close(), 1000);
+          });
+      } else {
+        // Running in main tab
+        window.history.replaceState({}, document.title, window.location.pathname);
+        fetch('/api/auth/discord/exchange', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: discordCode, redirect_uri: registeredRedirectUri }),
+        })
+          .then((res) => res.json())
+          .then(async (data) => {
+            if (data?.user) {
+              const discordUser = data.user;
+              const profile = await getUserProfileFromFirestore(discordUser.id);
+              if (profile) {
+                handleDiscordLoginSuccess(profile);
+              } else {
+                handleNeedRegistration({
+                  id: discordUser.id,
+                  username: discordUser.username,
+                  global_name: discordUser.global_name || discordUser.username,
+                  avatar: discordUser.avatar,
+                });
+              }
+            }
+          })
+          .catch((err) => {
+            console.error('Failed to exchange Discord code on main tab:', err);
+          });
+      }
+    }
+
     return () => {
       unsubMembers();
       unsubAnnouncements();
@@ -316,6 +419,7 @@ export default function App() {
   if (currentView === 'landing') {
     return (
       <LandingView
+        onLoginSuccess={handleDiscordLoginSuccess}
         onDiscordLoginSuccess={handleDiscordLoginSuccess}
         onNeedRegistration={handleNeedRegistration}
       />

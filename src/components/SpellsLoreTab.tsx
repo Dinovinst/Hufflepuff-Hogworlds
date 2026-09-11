@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { SpellCategory, SpellItem, StudentProfile, DirectoryMember } from '../types';
+import { HOGWORLDS_CURRICULUM } from '../data/hufflepuffData';
 import { 
   Wand2, 
   Search, 
@@ -19,6 +20,8 @@ import {
   Award,
   BookOpen,
   Filter,
+  GraduationCap,
+  ChevronRight,
   X
 } from 'lucide-react';
 
@@ -37,7 +40,7 @@ export const SpellsLoreTab: React.FC<SpellsLoreTabProps> = ({
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<'All' | SpellCategory>('All');
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedYear, setSelectedYear] = useState<number | 'All'>('All');
+  const [selectedYear, setSelectedYear] = useState<number | 'All' | 'other'>('All');
   const [possessionFilter, setPossessionFilter] = useState<'all' | 'possessed' | 'unpossessed'>('all');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [castingSpell, setCastingSpell] = useState<SpellItem | null>(null);
@@ -46,6 +49,16 @@ export const SpellsLoreTab: React.FC<SpellsLoreTabProps> = ({
   const [rosterSearch, setRosterSearch] = useState('');
 
   const userPossessedSpells = userProfile?.possessedSpells || [];
+
+  // Helper to check if a spell is possessed by the current user
+  const isSpellPossessed = (spell: SpellItem | { id: string; name: string }) => {
+    return (
+      userPossessedSpells.includes(spell.id) ||
+      userPossessedSpells.some(
+        (s) => s.toLowerCase() === spell.name.toLowerCase() || s.toLowerCase() === spell.id.toLowerCase()
+      )
+    );
+  };
 
   // Categories
   const categories: { id: 'All' | SpellCategory; label: string; count: number; icon: any; color: string }[] = [
@@ -89,10 +102,15 @@ export const SpellsLoreTab: React.FC<SpellsLoreTabProps> = ({
   // Filter spells
   const filteredSpells = spellsData.filter((spell) => {
     const matchesCat = selectedCategory === 'All' ? true : spell.category === selectedCategory;
-    const matchesYear = selectedYear === 'All' ? true : spell.minYear === selectedYear;
-    
+    const matchesYear =
+      selectedYear === 'All'
+        ? true
+        : selectedYear === 'other'
+        ? spell.minYear > 3
+        : spell.minYear === selectedYear;
+
     // Check possession
-    const isPossessed = userPossessedSpells.includes(spell.id);
+    const isPossessed = isSpellPossessed(spell);
     const matchesPossession =
       possessionFilter === 'all'
         ? true
@@ -103,9 +121,10 @@ export const SpellsLoreTab: React.FC<SpellsLoreTabProps> = ({
     const matchesSearch =
       spell.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       spell.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      spell.effect.toLowerCase().includes(searchQuery.toLowerCase());
+      spell.effect.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (spell.slashCommand && spell.slashCommand.toLowerCase().includes(searchQuery.toLowerCase()));
 
-    return matchesCat && matchesPossession && matchesSearch;
+    return matchesCat && matchesYear && matchesPossession && matchesSearch;
   });
 
   const handleTogglePossession = (spellId: string, e: React.MouseEvent) => {
@@ -130,8 +149,15 @@ export const SpellsLoreTab: React.FC<SpellsLoreTabProps> = ({
   };
 
   // Find members who possess a specific spell
-  const getMembersWithSpell = (spellId: string) => {
-    return members.filter((m) => m.possessedSpells && m.possessedSpells.includes(spellId));
+  const getMembersWithSpell = (spell: SpellItem) => {
+    return members.filter(
+      (m) =>
+        m.possessedSpells &&
+        (m.possessedSpells.includes(spell.id) ||
+          m.possessedSpells.some(
+            (s) => s.toLowerCase() === spell.name.toLowerCase() || s.toLowerCase() === spell.id.toLowerCase()
+          ))
+    );
   };
 
   // Mastery percentage
@@ -270,39 +296,186 @@ export const SpellsLoreTab: React.FC<SpellsLoreTabProps> = ({
             </div>
           </div>
 
-          {/* Category Tabs Bar */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
-            {categories.map((cat) => {
-              const Icon = cat.icon;
-              const isSelected = selectedCategory === cat.id;
-              return (
+          {/* Hogworlds Year 1-3 Official Curriculum Overview */}
+          <div className="bg-[#141418] border border-amber-500/20 rounded-3xl p-5 sm:p-6 shadow-md">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-amber-500/15 border border-amber-400/30 text-[#FEE101]">
+                  <GraduationCap className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-cinzel text-base sm:text-lg font-bold text-amber-100 flex items-center gap-2">
+                    <span>หลักสูตรคาถาตามระดับชั้นปี</span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-950 border border-amber-400/30 text-[#FEE101]">
+                      ชั้นปี 1 - 3 (18 คาถาหลัก)
+                    </span>
+                  </h3>
+                  <p className="text-xs text-neutral-400">
+                    คาถาตามหลักสูตรทางการของโรงเรียนฮอกวอตส์ FiveM SRP จัดเรียงตามระดับชั้นปี
+                  </p>
+                </div>
+              </div>
+
+              {selectedYear !== 'All' && (
                 <button
-                  key={cat.id}
-                  onClick={() => setSelectedCategory(cat.id)}
-                  className={`px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-2 border cursor-pointer ${
-                    isSelected
-                      ? 'bg-[#FEE101] text-neutral-950 border-[#FEE101] shadow-md shadow-[#FEE101]/25 font-bold'
-                      : 'bg-[#18181f] text-neutral-300 hover:text-white border-neutral-800 hover:border-neutral-700'
-                  }`}
+                  onClick={() => setSelectedYear('All')}
+                  className="text-xs text-neutral-400 hover:text-white px-3 py-1.5 rounded-xl bg-neutral-900 border border-neutral-700 transition-colors self-start sm:self-auto cursor-pointer"
                 >
-                  <Icon className={`w-4 h-4 ${isSelected ? 'text-neutral-950' : cat.color}`} />
-                  <span>{cat.label}</span>
-                  <span
-                    className={`px-1.5 py-0.2 rounded-full text-[10px] ${
-                      isSelected ? 'bg-neutral-900 text-[#FEE101]' : 'bg-neutral-800 text-neutral-400'
+                  รีเซ็ตแสดงทุกชั้นปี
+                </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {HOGWORLDS_CURRICULUM.map((curr) => {
+                const yearSpells = curr.spellIds
+                  .map((id) => spellsData.find((s) => s.id === id))
+                  .filter((s): s is SpellItem => Boolean(s));
+                const learnedCount = yearSpells.filter((s) => isSpellPossessed(s)).length;
+                const isSelected = selectedYear === curr.year;
+                const percent = Math.round((learnedCount / (yearSpells.length || 1)) * 100);
+
+                return (
+                  <div
+                    key={curr.year}
+                    className={`p-4 rounded-2xl border transition-all flex flex-col justify-between ${
+                      isSelected
+                        ? 'bg-[#181822] border-[#FEE101] shadow-lg shadow-amber-500/10'
+                        : 'bg-[#101014] border-neutral-800 hover:border-neutral-700'
                     }`}
                   >
-                    {cat.count}
-                  </span>
-                </button>
-              );
-            })}
+                    <div>
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${curr.badgeBg}`}>
+                          {curr.badgeLabel}
+                        </span>
+                        <span className="text-xs font-semibold text-neutral-300">
+                          {learnedCount}/{yearSpells.length} คาถา
+                        </span>
+                      </div>
+
+                      {/* Mini progress */}
+                      <div className="w-full bg-[#08080a] h-1.5 rounded-full overflow-hidden mb-3">
+                        <div
+                          className="h-full rounded-full transition-all duration-300"
+                          style={{
+                            width: `${percent}%`,
+                            backgroundColor: curr.themeColor,
+                          }}
+                        />
+                      </div>
+
+                      {/* Spell chips */}
+                      <div className="flex flex-wrap gap-1.5 mb-3">
+                        {yearSpells.map((sp) => {
+                          const possessed = isSpellPossessed(sp);
+                          return (
+                            <button
+                              key={sp.id}
+                              onClick={() => setCastingSpell(sp)}
+                              title={`คลิกดูรายละเอียดคาถา ${sp.name}`}
+                              className={`text-[11px] px-2 py-1 rounded-lg border flex items-center gap-1 transition-all cursor-pointer ${
+                                possessed
+                                  ? 'bg-emerald-950/70 border-emerald-500/50 text-emerald-200 hover:border-emerald-400'
+                                  : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-neutral-200 hover:border-neutral-700'
+                              }`}
+                            >
+                              {possessed ? (
+                                <Check className="w-3 h-3 text-emerald-400" />
+                              ) : (
+                                <Circle className="w-2.5 h-2.5 text-neutral-500" />
+                              )}
+                              <span>{sp.name}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => setSelectedYear(isSelected ? 'All' : curr.year)}
+                      className={`w-full py-2 px-3 rounded-xl text-xs font-semibold border transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                        isSelected
+                          ? 'bg-[#FEE101] text-neutral-950 border-[#FEE101] font-bold shadow-md shadow-amber-500/20'
+                          : 'bg-neutral-900/80 hover:bg-neutral-800 text-neutral-300 border-neutral-800 hover:border-neutral-700'
+                      }`}
+                    >
+                      <span>{isSelected ? '✓ กำลังกรองชั้นปีนี้' : `กรองดูเฉพาะชั้นปี ${curr.year}`}</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Filters Section: Year Filter & Category Tabs Bar */}
+          <div className="space-y-3">
+            {/* Year Selector Pills */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+              <span className="text-xs text-neutral-400 font-medium whitespace-nowrap flex items-center gap-1 mr-1">
+                <GraduationCap className="w-3.5 h-3.5 text-[#FEE101]" />
+                <span>ระดับชั้นปี:</span>
+              </span>
+
+              {[
+                { id: 'All', label: 'ทุกชั้นปี' },
+                { id: 1, label: 'ชั้นปี 1 (4 คาถา)' },
+                { id: 2, label: 'ชั้นปี 2 (7 คาถา)' },
+                { id: 3, label: 'ชั้นปี 3 (7 คาถา)' },
+                { id: 'other', label: 'ชั้นปี 4-7 / อื่นๆ' },
+              ].map((y) => {
+                const isSelected = selectedYear === y.id;
+                return (
+                  <button
+                    key={String(y.id)}
+                    onClick={() => setSelectedYear(y.id as any)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all border cursor-pointer ${
+                      isSelected
+                        ? 'bg-amber-400/20 text-[#FEE101] border-[#FEE101] shadow-sm font-bold'
+                        : 'bg-[#18181f] text-neutral-400 hover:text-white border-neutral-800 hover:border-neutral-700'
+                    }`}
+                  >
+                    {y.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Category Tabs Bar */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+              {categories.map((cat) => {
+                const Icon = cat.icon;
+                const isSelected = selectedCategory === cat.id;
+                return (
+                  <button
+                    key={cat.id}
+                    onClick={() => setSelectedCategory(cat.id)}
+                    className={`px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-2 border cursor-pointer ${
+                      isSelected
+                        ? 'bg-[#FEE101] text-neutral-950 border-[#FEE101] shadow-md shadow-[#FEE101]/25 font-bold'
+                        : 'bg-[#18181f] text-neutral-300 hover:text-white border-neutral-800 hover:border-neutral-700'
+                    }`}
+                  >
+                    <Icon className={`w-4 h-4 ${isSelected ? 'text-neutral-950' : cat.color}`} />
+                    <span>{cat.label}</span>
+                    <span
+                      className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                        isSelected ? 'bg-neutral-900 text-[#FEE101]' : 'bg-neutral-800 text-neutral-400'
+                      }`}
+                    >
+                      {cat.count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* Spells Count */}
           <div className="flex items-center justify-between text-xs text-neutral-400">
             <span className="text-neutral-400">
-              หมวดหมู่คาถา: <strong className="text-[#FEE101]">{selectedCategory === 'All' ? 'ทั้งหมด' : selectedCategory}</strong>
+              ตัวกรอง: <strong className="text-[#FEE101]">{selectedCategory === 'All' ? 'ทุกหมวดหมู่' : selectedCategory}</strong> • <strong className="text-amber-300">{selectedYear === 'All' ? 'ทุกชั้นปี' : selectedYear === 'other' ? 'ชั้นปี 4-7' : `ชั้นปี ${selectedYear}`}</strong>
             </span>
             <span className="text-neutral-400">
               แสดง {filteredSpells.length} จากทั้งหมด {spellsData.length} คาถา
@@ -312,8 +485,8 @@ export const SpellsLoreTab: React.FC<SpellsLoreTabProps> = ({
           {/* Spells Cards Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {filteredSpells.map((spell) => {
-              const isPossessed = userPossessedSpells.includes(spell.id);
-              const possessors = getMembersWithSpell(spell.id);
+              const isPossessed = isSpellPossessed(spell);
+              const possessors = getMembersWithSpell(spell);
 
               return (
                 <div
@@ -347,7 +520,7 @@ export const SpellsLoreTab: React.FC<SpellsLoreTabProps> = ({
                         </h3>
                       </div>
 
-                      {/* Possession Toggle Button (Explicit User Requirement) */}
+                      {/* Possession Toggle Button */}
                       <button
                         onClick={(e) => handleTogglePossession(spell.id, e)}
                         title={isPossessed ? 'คลิกเพื่อยกเลิกการครอบครอง' : 'คลิกเพื่อติ๊กบันทึกว่ามีคาถานี้แล้ว'}
@@ -371,10 +544,24 @@ export const SpellsLoreTab: React.FC<SpellsLoreTabProps> = ({
                       </button>
                     </div>
 
-                    {/* Badges: Category & Member count */}
-                    <div className="flex items-center gap-2 mb-3">
+                    {/* Badges: Category, Year & Member count */}
+                    <div className="flex items-center gap-2 mb-3 flex-wrap">
                       <span className={`text-[10px] uppercase font-bold px-2.5 py-0.5 rounded-full border ${getCategoryBadge(spell.category)}`}>
                         {spell.category}
+                      </span>
+
+                      <span
+                        className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${
+                          spell.minYear === 1
+                            ? 'bg-amber-500/15 text-[#FEE101] border-amber-400/40'
+                            : spell.minYear === 2
+                            ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
+                            : spell.minYear === 3
+                            ? 'bg-sky-500/15 text-sky-300 border-sky-500/40'
+                            : 'bg-neutral-800 text-neutral-400 border-neutral-700'
+                        }`}
+                      >
+                        ชั้นปี {spell.minYear}
                       </span>
 
                       {/* Possessor members count pill */}
@@ -401,6 +588,29 @@ export const SpellsLoreTab: React.FC<SpellsLoreTabProps> = ({
                       <Zap className="w-3.5 h-3.5 text-[#FEE101] flex-shrink-0 mt-0.5" />
                       <span className="line-clamp-2">{spell.effect}</span>
                     </div>
+
+                    {/* Slash Command Pill */}
+                    {spell.slashCommand && (
+                      <div className="mt-2.5 flex items-center justify-between px-2.5 py-1.5 rounded-xl bg-[#0a0a0d] border border-neutral-800/90 text-[11px] font-mono text-amber-200/90">
+                        <span className="truncate">{spell.slashCommand}</span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigator.clipboard.writeText(spell.slashCommand || '');
+                            setCopiedId(spell.id);
+                            setTimeout(() => setCopiedId(null), 1800);
+                          }}
+                          className="ml-2 text-neutral-400 hover:text-[#FEE101] flex-shrink-0 cursor-pointer p-0.5"
+                          title="คัดลอกคำสั่งร่ายคาถา"
+                        >
+                          {copiedId === spell.id ? (
+                            <Check className="w-3.5 h-3.5 text-emerald-400" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               );
@@ -517,12 +727,36 @@ export const SpellsLoreTab: React.FC<SpellsLoreTabProps> = ({
       {castingSpell && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
           <div className="bg-[#16161d] border-2 border-[#FEE101] rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-[0_0_60px_rgba(254,225,1,0.25)] text-left relative overflow-hidden">
-            <div className="flex items-start justify-between gap-3 mb-4">
+            <div className="flex items-start justify-between gap-3 mb-3">
               <div>
-                <span className={`text-[11px] uppercase font-bold px-2.5 py-0.5 rounded-full border ${getCategoryBadge(castingSpell.category)}`}>
-                  {castingSpell.category}
-                </span>
-                <h3 className="font-cinzel text-2xl font-black text-[#FEE101] mt-2">
+                <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                  <span className={`text-[11px] uppercase font-bold px-2.5 py-0.5 rounded-full border ${getCategoryBadge(castingSpell.category)}`}>
+                    {castingSpell.category}
+                  </span>
+
+                  <span
+                    className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${
+                      castingSpell.minYear === 1
+                        ? 'bg-amber-500/15 text-[#FEE101] border-amber-400/50'
+                        : castingSpell.minYear === 2
+                        ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/50'
+                        : castingSpell.minYear === 3
+                        ? 'bg-sky-500/15 text-sky-300 border-sky-500/50'
+                        : 'bg-neutral-800 text-neutral-300 border-neutral-700'
+                    }`}
+                  >
+                    ชั้นปี {castingSpell.minYear}
+                  </span>
+
+                  {[1, 2, 3].includes(castingSpell.minYear) && (
+                    <span className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-amber-950/80 text-amber-300 border border-amber-400/30 flex items-center gap-1">
+                      <GraduationCap className="w-3 h-3 text-[#FEE101]" />
+                      <span>หลักสูตรทางการปี {castingSpell.minYear}</span>
+                    </span>
+                  )}
+                </div>
+
+                <h3 className="font-cinzel text-2xl font-black text-[#FEE101]">
                   {castingSpell.name}
                 </h3>
               </div>
@@ -543,12 +777,12 @@ export const SpellsLoreTab: React.FC<SpellsLoreTabProps> = ({
               <button
                 onClick={(e) => handleTogglePossession(castingSpell.id, e)}
                 className={`px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                  userPossessedSpells.includes(castingSpell.id)
+                  isSpellPossessed(castingSpell)
                     ? 'bg-emerald-500 text-neutral-950 font-bold'
                     : 'bg-neutral-800 text-neutral-300 hover:bg-neutral-700'
                 }`}
               >
-                {userPossessedSpells.includes(castingSpell.id) ? (
+                {isSpellPossessed(castingSpell) ? (
                   <>
                     <Check className="w-3.5 h-3.5" />
                     <span>ครอบครองแล้ว</span>
@@ -563,7 +797,7 @@ export const SpellsLoreTab: React.FC<SpellsLoreTabProps> = ({
             </div>
 
             {/* Spell Details */}
-            <div className="space-y-4 mb-6">
+            <div className="space-y-3.5 mb-6">
               <div className="p-4 rounded-2xl bg-[#0f0f13] border border-[#FEE101]/20">
                 <p className="text-xs uppercase tracking-wider text-amber-300 font-semibold mb-1">
                   คำอธิบายและประวัติคาถา
@@ -582,6 +816,35 @@ export const SpellsLoreTab: React.FC<SpellsLoreTabProps> = ({
                   {castingSpell.effect}
                 </p>
               </div>
+
+              {castingSpell.slashCommand && (
+                <div className="p-3.5 rounded-2xl bg-[#0a0a0e] border border-neutral-800 flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] uppercase font-bold text-neutral-400">คำสั่งร่ายในเกม (Slash Command)</p>
+                    <p className="font-mono text-xs text-[#FEE101] font-bold mt-0.5">{castingSpell.slashCommand}</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(castingSpell.slashCommand || '');
+                      setCopiedId(castingSpell.id);
+                      setTimeout(() => setCopiedId(null), 1800);
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-xs flex items-center gap-1 cursor-pointer border border-neutral-700"
+                  >
+                    {copiedId === castingSpell.id ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        <span className="text-emerald-400">คัดลอกแล้ว</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>คัดลอก</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
             </div>
 
             <button
@@ -616,12 +879,12 @@ export const SpellsLoreTab: React.FC<SpellsLoreTabProps> = ({
             </div>
 
             <div className="space-y-2.5 max-h-80 overflow-y-auto pr-1">
-              {getMembersWithSpell(viewingPossessorsSpell.id).length === 0 ? (
+              {getMembersWithSpell(viewingPossessorsSpell).length === 0 ? (
                 <div className="py-8 text-center text-xs text-neutral-400">
                   ยังไม่มีสมาชิกคนใดบันทึกว่ามีคาถานี้
                 </div>
               ) : (
-                getMembersWithSpell(viewingPossessorsSpell.id).map((m) => (
+                getMembersWithSpell(viewingPossessorsSpell).map((m) => (
                   <div
                     key={m.id}
                     className="p-3 rounded-xl bg-[#0f0f13] border border-neutral-800 flex items-center justify-between gap-3"

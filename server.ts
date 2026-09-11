@@ -123,6 +123,55 @@ function getDiscordClientId(): string {
   return DEFAULT_DISCORD_CLIENT_ID;
 }
 
+// Helper to determine the exact registered Discord Redirect URI based on environment
+function getDiscordRedirectUri(req?: express.Request, explicitOriginOrUri?: string): string {
+  if (explicitOriginOrUri) {
+    const trimmed = explicitOriginOrUri.trim();
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      if (trimmed.includes('hufflepuffhogworlds.vercel.app')) {
+        return 'https://hufflepuffhogworlds.vercel.app/';
+      }
+      if (trimmed.includes('/auth/discord/callback')) {
+        return trimmed;
+      }
+      if (trimmed.includes('run.app') || trimmed.includes('localhost')) {
+        return `${trimmed.replace(/\/+$/, '')}/auth/discord/callback`;
+      }
+      return trimmed;
+    }
+  }
+
+  if (req) {
+    const host = (req.get('host') || '').toLowerCase();
+    const origin = (req.get('origin') || '').toLowerCase();
+    const referer = (req.get('referer') || '').toLowerCase();
+
+    if (
+      host.includes('hufflepuffhogworlds.vercel.app') ||
+      origin.includes('hufflepuffhogworlds.vercel.app') ||
+      referer.includes('hufflepuffhogworlds.vercel.app')
+    ) {
+      return 'https://hufflepuffhogworlds.vercel.app/';
+    }
+
+    if (
+      host.includes('ais-dev-vckel7x5hodtyy6dib2j4d-759650935515.asia-southeast1.run.app') ||
+      origin.includes('ais-dev-vckel7x5hodtyy6dib2j4d-759650935515.asia-southeast1.run.app') ||
+      referer.includes('ais-dev-vckel7x5hodtyy6dib2j4d-759650935515.asia-southeast1.run.app')
+    ) {
+      return 'https://ais-dev-vckel7x5hodtyy6dib2j4d-759650935515.asia-southeast1.run.app/auth/discord/callback';
+    }
+
+    const baseUrl = getBaseUrl(req);
+    if (baseUrl.includes('vercel.app')) {
+      return `${baseUrl}/`;
+    }
+    return `${baseUrl}/auth/discord/callback`;
+  }
+
+  return 'https://hufflepuffhogworlds.vercel.app/';
+}
+
 // Helper to check if real Discord OAuth credentials exist
 function isDiscordOAuthConfigured(): boolean {
   const clientId = getDiscordClientId();
@@ -135,15 +184,19 @@ function isDiscordOAuthConfigured(): boolean {
 // Config check endpoint
 app.get('/api/auth/discord/config', (req, res) => {
   const clientId = getDiscordClientId();
-  const baseUrl = getBaseUrl(req);
-  const redirectUri = `${baseUrl}/`;
+  const explicitUri = (req.query.redirect_uri as string) || (req.query.origin as string);
+  const redirectUri = getDiscordRedirectUri(req, explicitUri);
   const isConfigured = isDiscordOAuthConfigured();
 
   res.json({
     configured: isConfigured,
     clientId,
     redirectUri,
-    appUrl: baseUrl,
+    appUrl: getBaseUrl(req),
+    registeredUrls: [
+      'https://discord.com/oauth2/authorize?client_id=1547653660845285406&response_type=code&redirect_uri=https%3A%2F%2Fhufflepuffhogworlds.vercel.app%2F&scope=identify',
+      'https://discord.com/oauth2/authorize?client_id=1547653660845285406&response_type=code&redirect_uri=https%3A%2F%2Fais-dev-vckel7x5hodtyy6dib2j4d-759650935515.asia-southeast1.run.app%2Fauth%2Fdiscord%2Fcallback&scope=identify',
+    ],
     officialOAuthUrl: `https://discord.com/oauth2/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&scope=identify`,
   });
 });
@@ -151,18 +204,19 @@ app.get('/api/auth/discord/config', (req, res) => {
 // Generate Discord OAuth Authorization URL
 app.get('/api/auth/discord/url', (req, res) => {
   const clientId = getDiscordClientId();
-  const baseUrl = getBaseUrl(req);
+  const explicitUri = (req.query.redirect_uri as string) || (req.query.origin as string);
+  const redirectUri = getDiscordRedirectUri(req, explicitUri);
 
   const isConfigured = isDiscordOAuthConfigured();
-  // Always use the Authorization Code flow. The Client Secret stays server-side.
-  // The registered Discord redirect URI for this project is the production site root.
-  const redirectUri = `${baseUrl}/`;
+  // When secret is configured, use standard code exchange.
+  // Otherwise, use direct token (Implicit Grant) which requires NO secret and works instantly.
+  const responseType = isConfigured ? 'code' : 'token';
   const state = req.query.state ? String(req.query.state) : '';
 
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUri,
-    response_type: 'code',
+    response_type: responseType,
     scope: 'identify',
   });
   if (state) params.set('state', state);
@@ -174,7 +228,7 @@ app.get('/api/auth/discord/url', (req, res) => {
     clientId,
     url: authUrl,
     redirectUri,
-    responseType: 'code',
+    responseType,
     isSecretValid: isConfigured,
   });
 });
@@ -277,7 +331,8 @@ app.post('/api/auth/discord/exchange', async (req, res) => {
     return res.status(400).json({ message: 'Discord authorization code is required' });
   }
 
-  const redirectUri = `${getBaseUrl(req)}/`;
+  const explicitRedirectUri = typeof req.body?.redirect_uri === 'string' ? req.body.redirect_uri.trim() : '';
+  const redirectUri = getDiscordRedirectUri(req, explicitRedirectUri);
 
   try {
     const tokenResponse = await fetch('https://discord.com/api/v10/oauth2/token', {
@@ -294,9 +349,10 @@ app.post('/api/auth/discord/exchange', async (req, res) => {
 
     const tokenData = await tokenResponse.json().catch(() => null);
     if (!tokenResponse.ok || !tokenData?.access_token) {
-      console.error('[Discord OAuth] Token exchange failed:', tokenResponse.status, tokenData);
+      console.error('[Discord OAuth] Token exchange failed:', tokenResponse.status, tokenData, 'used redirectUri:', redirectUri);
       return res.status(401).json({
         message: 'ไม่สามารถยืนยันตัวตนกับ Discord ได้ กรุณาลองเข้าสู่ระบบใหม่อีกครั้ง',
+        details: tokenData?.error_description || tokenData?.error || 'Token exchange failed',
       });
     }
 
@@ -339,13 +395,12 @@ app.get(['/auth/discord/callback', '/auth/discord/callback/'], async (req, res) 
   const error = req.query.error as string;
   const clientId = getDiscordClientId();
   const clientSecret = process.env.DISCORD_CLIENT_SECRET;
-  const baseUrl = getBaseUrl(req);
-  const redirectUri = `${baseUrl}/auth/discord/callback`;
+  const redirectUri = getDiscordRedirectUri(req);
 
   // If user arrived with a server code and we have valid credentials, attempt server-side token exchange
   if (code && isDiscordOAuthConfigured()) {
     try {
-      const tokenResponse = await fetch('https://discord.com/api/oauth2/token', {
+      const tokenResponse = await fetch('https://discord.com/api/v10/oauth2/token', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
@@ -363,7 +418,7 @@ app.get(['/auth/discord/callback', '/auth/discord/callback/'], async (req, res) 
         const tokenData = await tokenResponse.json();
         const accessToken = tokenData.access_token;
 
-        const userResponse = await fetch('https://discord.com/api/users/@me', {
+        const userResponse = await fetch('https://discord.com/api/v10/users/@me', {
           headers: {
             Authorization: `Bearer ${accessToken}`,
           },
@@ -386,7 +441,8 @@ app.get(['/auth/discord/callback', '/auth/discord/callback/'], async (req, res) 
           return res.send(renderSuccessHtml(userPayload));
         }
       } else {
-        console.warn('Server-side token exchange rejected with status', tokenResponse.status, 'switching to seamless client flow');
+        const errBody = await tokenResponse.json().catch(() => null);
+        console.warn('Server-side token exchange rejected with status', tokenResponse.status, errBody);
       }
     } catch (tokenErr) {
       console.warn('Server token exchange error:', tokenErr);
@@ -441,16 +497,30 @@ app.get(['/auth/discord/callback', '/auth/discord/callback/'], async (req, res) 
       </head>
       <body>
         <div class="card">
-          <div class="spinner"></div>
+          <div id="spinner" class="spinner"></div>
           <h3 id="title-text" style="margin:0 0 8px 0;">กำลังเชื่อมต่อกับ Discord...</h3>
-          <p id="status-text" style="color:#d1d5db; font-size:14px; margin:0;">
+          <p id="status-text" style="color:#d1d5db; font-size:14px; margin:0 0 16px 0;">
             กำลังตรวจสอบสิทธิ์และรับข้อมูลนักเรียน...
           </p>
+          <div id="action-container" style="display:none;">
+            <button id="retry-btn" onclick="window.location.reload()" style="background:#5865F2; color:#fff; border:none; padding:8px 18px; border-radius:8px; font-size:13px; font-weight:bold; cursor:pointer;">
+              ลองใหม่อีกครั้ง
+            </button>
+          </div>
         </div>
         <script>
           (async function() {
+            const spinnerEl = document.getElementById('spinner');
             const statusEl = document.getElementById('status-text');
             const titleEl = document.getElementById('title-text');
+            const actionEl = document.getElementById('action-container');
+
+            function showError(msg) {
+              if (spinnerEl) spinnerEl.style.display = 'none';
+              if (actionEl) actionEl.style.display = 'block';
+              titleEl.textContent = 'การเชื่อมต่อไม่สำเร็จ';
+              statusEl.textContent = msg;
+            }
 
             // 1. Check URL Fragment (#access_token=...) and Query (?error=...)
             const hash = window.location.hash.startsWith('#') ? window.location.hash.substring(1) : '';
@@ -459,22 +529,21 @@ app.get(['/auth/discord/callback', '/auth/discord/callback/'], async (req, res) 
 
             const err = hashParams.get('error') || searchParams.get('error');
             if (err) {
-              titleEl.textContent = 'การเข้าสู่ระบบถูกยกเลิก';
-              statusEl.textContent = err;
+              showError('การเข้าสู่ระบบถูกยกเลิก หรือ Discord ปฏิเสธการเข้าถึง: ' + err);
               if (window.opener) {
                 window.opener.postMessage({ type: 'DISCORD_AUTH_ERROR', error: err }, '*');
-                setTimeout(() => window.close(), 1500);
+                setTimeout(() => window.close(), 2500);
               }
               return;
             }
 
             const accessToken = hashParams.get('access_token');
 
-            // If we have an access token from Discord Implicit grant:
+            // 2. If we have an access token from Discord Implicit grant:
             if (accessToken) {
               statusEl.textContent = 'ดึงข้อมูลโปรไฟล์ Discord สำเร็จ กำลังส่งข้อมูล...';
               try {
-                const userRes = await fetch('https://discord.com/api/users/@me', {
+                const userRes = await fetch('https://discord.com/api/v10/users/@me', {
                   headers: { Authorization: 'Bearer ' + accessToken }
                 });
                 if (!userRes.ok) {
@@ -498,30 +567,65 @@ app.get(['/auth/discord/callback', '/auth/discord/callback/'], async (req, res) 
 
                 if (window.opener) {
                   window.opener.postMessage({ type: 'DISCORD_AUTH_SUCCESS', discordUser: userPayload }, '*');
-                  setTimeout(() => window.close(), 500);
+                  setTimeout(() => window.close(), 400);
                 } else {
                   window.location.href = '/';
                 }
                 return;
               } catch (fetchErr) {
                 console.error('Error fetching Discord user with token:', fetchErr);
-                statusEl.textContent = 'ไม่สามารถดึงข้อมูล Discord ได้';
+                showError('ไม่สามารถดึงข้อมูล Discord ได้: ' + (fetchErr.message || 'เครือข่ายขัดข้อง'));
                 if (window.opener) {
                   window.opener.postMessage({ type: 'DISCORD_AUTH_ERROR', error: fetchErr.message }, '*');
-                  setTimeout(() => window.close(), 2000);
                 }
                 return;
               }
             }
 
-            // 2. If code exchange failed or arrived without code/token,
-            // seamlessly redirect to Discord with response_type=token.
-            // Since the user already authorized the app, Discord auto-approves and redirects back in milliseconds!
-            const clientId = ${JSON.stringify(clientId)};
-            const redirectUri = encodeURIComponent(${JSON.stringify(redirectUri)});
-            const seamlessTokenUrl = 'https://discord.com/oauth2/authorize?client_id=' + clientId + '&response_type=token&redirect_uri=' + redirectUri + '&scope=identify';
+            // 3. If code was received, attempt exchange via /api/auth/discord/exchange
+            const codeParam = searchParams.get('code');
+            if (codeParam) {
+              statusEl.textContent = 'กำลังแลกเปลี่ยน Token ยืนยันตัวตน...';
+              try {
+                const exchRes = await fetch('/api/auth/discord/exchange', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ code: codeParam, redirect_uri: window.location.href.split('?')[0] }),
+                });
+                const exchData = await exchRes.json();
+                if (exchRes.ok && exchData?.user) {
+                  titleEl.textContent = 'เข้าสู่ระบบสำเร็จ!';
+                  statusEl.textContent = 'ยินดีต้อนรับ ' + (exchData.user.global_name || exchData.user.username);
+                  if (window.opener) {
+                    window.opener.postMessage({ type: 'DISCORD_AUTH_SUCCESS', discordUser: exchData.user }, '*');
+                    setTimeout(() => window.close(), 400);
+                  } else {
+                    window.location.href = '/';
+                  }
+                  return;
+                } else {
+                  console.warn('Exchange failed, seamlessly redirecting to token grant:', exchData);
+                  // Since code exchange failed (e.g. secret not set or invalid), seamlessly switch to token flow!
+                  // Because user already clicked Authorize, Discord auto-approves instantly in ~200ms!
+                  statusEl.textContent = 'กำลังยืนยันตัวตนอัตโนมัติ...';
+                  const clientId = ${JSON.stringify(clientId)};
+                  const redirectUri = encodeURIComponent(${JSON.stringify(redirectUri)});
+                  const tokenRedirectUrl = 'https://discord.com/oauth2/authorize?client_id=' + clientId + '&response_type=token&redirect_uri=' + redirectUri + '&scope=identify';
+                  window.location.replace(tokenRedirectUrl);
+                  return;
+                }
+              } catch (exchErr) {
+                console.error('Exchange error, falling back to token grant:', exchErr);
+                const clientId = ${JSON.stringify(clientId)};
+                const redirectUri = encodeURIComponent(${JSON.stringify(redirectUri)});
+                const tokenRedirectUrl = 'https://discord.com/oauth2/authorize?client_id=' + clientId + '&response_type=token&redirect_uri=' + redirectUri + '&scope=identify';
+                window.location.replace(tokenRedirectUrl);
+                return;
+              }
+            }
 
-            window.location.replace(seamlessTokenUrl);
+            // 4. Fallback if no code or token
+            showError('ไม่พบรหัสยืนยันตัวตน กรุณาปิดหน้าต่างนี้และลองเข้าสู่ระบบใหม่อีกครั้ง');
           })();
         </script>
       </body>

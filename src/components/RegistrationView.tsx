@@ -214,7 +214,16 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
       discordUsername: currentDiscord.username,
       discordAvatar: currentDiscord.avatar,
       bio,
-      possessedSpells: existingProfile?.possessedSpells || ['Lumos', 'Nox', 'Alohomora', 'Wingardium Leviosa'],
+      possessedSpells: existingProfile?.possessedSpells || [
+        'sp-expelliarmus',
+        'sp-lumos',
+        'sp-protego',
+        'sp-rapidus',
+        'Expelliarmus',
+        'Lumos',
+        'Protego',
+        'Rapidus'
+      ],
     };
 
     try {

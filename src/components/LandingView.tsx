@@ -6,16 +6,26 @@ import { DiscordAuthUser } from './RegistrationView';
 import { getUserProfileFromFirestore } from '../lib/hufflepuffFirestore';
 
 interface LandingViewProps {
-  onLoginSuccess: (profile: StudentProfile) => void;
+  onLoginSuccess?: (profile: StudentProfile) => void;
+  onDiscordLoginSuccess?: (profile: StudentProfile) => void;
   onNeedRegistration: (discordUser: DiscordAuthUser) => void;
 }
 
 export const LandingView: React.FC<LandingViewProps> = ({
   onLoginSuccess,
+  onDiscordLoginSuccess,
   onNeedRegistration,
 }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [authError, setAuthError] = useState<string>('');
+
+  const notifyLoginSuccess = (profile: StudentProfile) => {
+    if (onLoginSuccess) {
+      onLoginSuccess(profile);
+    } else if (onDiscordLoginSuccess) {
+      onDiscordLoginSuccess(profile);
+    }
+  };
 
   // Process Discord user identity from OAuth
   const handleDiscordUserReceived = async (discordUser: DiscordAuthUser) => {
@@ -25,7 +35,7 @@ export const LandingView: React.FC<LandingViewProps> = ({
       // 1. Check in Firestore database (Hufflepuff Hogworlds)
       const firestoreProfile = await getUserProfileFromFirestore(discordUser.id);
       if (firestoreProfile) {
-        onLoginSuccess(firestoreProfile);
+        notifyLoginSuccess(firestoreProfile);
         return;
       }
 
@@ -37,7 +47,7 @@ export const LandingView: React.FC<LandingViewProps> = ({
           if (text) {
             const data = JSON.parse(text);
             if (data?.user) {
-              onLoginSuccess(data.user);
+              notifyLoginSuccess(data.user);
               return;
             }
           }
@@ -62,7 +72,12 @@ export const LandingView: React.FC<LandingViewProps> = ({
     setAuthError('');
 
     try {
-      const res = await fetch('/api/auth/discord/url');
+      const isVercel = window.location.origin.includes('hufflepuffhogworlds.vercel.app');
+      const registeredRedirectUri = isVercel
+        ? 'https://hufflepuffhogworlds.vercel.app/'
+        : `${window.location.origin}/auth/discord/callback`;
+
+      const res = await fetch(`/api/auth/discord/url?redirect_uri=${encodeURIComponent(registeredRedirectUri)}`);
       let data: any = null;
       try {
         const text = await res.text();
@@ -73,11 +88,10 @@ export const LandingView: React.FC<LandingViewProps> = ({
         console.warn('Could not parse auth url response as JSON:', parseErr);
       }
 
-      const redirectUri = `${window.location.origin}/auth/discord/callback`;
       const authUrl =
         data?.url ||
         `https://discord.com/oauth2/authorize?client_id=1547653660845285406&response_type=token&redirect_uri=${encodeURIComponent(
-          redirectUri
+          registeredRedirectUri
         )}&scope=identify`;
 
       const width = 560;
@@ -97,13 +111,39 @@ export const LandingView: React.FC<LandingViewProps> = ({
         return;
       }
 
+      let checkClosedTimer: any = null;
+
       const messageHandler = async (event: MessageEvent) => {
         if (event.data && event.data.type === 'DISCORD_AUTH_SUCCESS') {
+          if (checkClosedTimer) clearInterval(checkClosedTimer);
           window.removeEventListener('message', messageHandler);
           if (event.data.discordUser) {
             await handleDiscordUserReceived(event.data.discordUser);
           }
+        } else if (event.data && event.data.type === 'DISCORD_CODE_RECEIVED') {
+          if (event.data.code) {
+            try {
+              const exchangeRes = await fetch('/api/auth/discord/exchange', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  code: event.data.code,
+                  redirect_uri: registeredRedirectUri,
+                }),
+              });
+              const exchangeData = await exchangeRes.json();
+              if (exchangeRes.ok && exchangeData?.user) {
+                if (checkClosedTimer) clearInterval(checkClosedTimer);
+                window.removeEventListener('message', messageHandler);
+                await handleDiscordUserReceived(exchangeData.user);
+                return;
+              }
+            } catch (exErr) {
+              console.warn('Exchange failed:', exErr);
+            }
+          }
         } else if (event.data && event.data.type === 'DISCORD_AUTH_ERROR') {
+          if (checkClosedTimer) clearInterval(checkClosedTimer);
           window.removeEventListener('message', messageHandler);
           setIsLoading(false);
           setAuthError(`การเข้าสู่ระบบล้มเหลว: ${event.data.error || 'กรุณาลองใหม่อีกครั้ง'}`);
@@ -111,6 +151,14 @@ export const LandingView: React.FC<LandingViewProps> = ({
       };
 
       window.addEventListener('message', messageHandler);
+
+      checkClosedTimer = setInterval(() => {
+        if (!popup || popup.closed) {
+          clearInterval(checkClosedTimer);
+          window.removeEventListener('message', messageHandler);
+          setIsLoading(false);
+        }
+      }, 800);
     } catch (err: any) {
       console.warn('Discord auth error:', err);
       setIsLoading(false);

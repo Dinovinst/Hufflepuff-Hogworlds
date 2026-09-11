@@ -453,12 +453,12 @@ export const ALL_SPELLS_DATA: SpellItem[] = [
   },
   {
     id: 'sp-ascendio',
-    name: 'Ascendio',
+    name: 'Ascendio (กระโดดสูง)',
     category: 'Basic',
     tiers: 4,
-    minYear: 3,
+    minYear: 2,
     slashCommand: '/cast ascendio',
-    description: 'คาถาส่งตัวเองพุ่งขึ้นสู่เบื้องบนอย่างรวดเร็ว (ทั้งบนบกและในน้ำ)',
+    description: 'คาถาส่งตัวเองพุ่งขึ้นสู่เบื้องบนอย่างรวดเร็ว (กระโดดสูง ทั้งบนบกและในน้ำ)',
     effect: 'ดีดตัวผู้ร่ายขึ้นสูง 8-20 เมตร ข้ามกำแพงหรือสิ่งกีดขวาง',
     cooldown: '10s',
   },
@@ -533,7 +533,7 @@ export const ALL_SPELLS_DATA: SpellItem[] = [
     name: 'Diffindo',
     category: 'Basic',
     tiers: 4,
-    minYear: 2,
+    minYear: 3,
     slashCommand: '/cast diffindo',
     description: 'คาถาตัด ตัดสิ่งของหรือเชือกพันธนาการอย่างแม่นยำดั่งคมมีด',
     effect: 'ตัดตาข่าย ตัดเชือก เก็บเกี่ยวสมุนไพร หรือสร้างความเสียหายเฉือน',
@@ -555,7 +555,7 @@ export const ALL_SPELLS_DATA: SpellItem[] = [
     name: 'Expelliarmus',
     category: 'Basic',
     tiers: 2,
-    minYear: 2,
+    minYear: 1,
     slashCommand: '/cast expelliarmus',
     description: 'คาถาปลดอาวุธเอกลักษณ์ ยิงลำแสงสีแดงเพื่อปลดไม้กายสิทธิ์หรืออาวุธ',
     effect: 'ทำให้คู่ต่อสู้ทำไม้กายสิทธิ์หลุดมือ หรือถูกปลดอาวุธ FiveM ในมือ',
@@ -577,7 +577,7 @@ export const ALL_SPELLS_DATA: SpellItem[] = [
     name: 'Ferula',
     category: 'Basic',
     tiers: 1,
-    minYear: 2,
+    minYear: 3,
     slashCommand: '/cast ferula',
     description: 'คาถาเสกผ้าพันแผลและเฝือกดามกระดูกที่หักในทันที',
     effect: 'รักษาอาการบาดเจ็บกระดูกหัก ขาเจ็บ ชะลอเลือดไหลในการโรลเพลย์',
@@ -731,7 +731,7 @@ export const ALL_SPELLS_DATA: SpellItem[] = [
     name: 'Nebulus',
     category: 'Basic',
     tiers: 4,
-    minYear: 4,
+    minYear: 3,
     slashCommand: '/cast nebulus',
     description: 'คาถาเสกหมอกหนาวคลี่คลุมพื้นที่รอบบริเวณกว้างขวาง',
     effect: 'หมอกเวทมนตร์บดบังสายตาจากทั้งทางอากาศและภาคพื้น',
@@ -742,7 +742,7 @@ export const ALL_SPELLS_DATA: SpellItem[] = [
     name: 'Obscuro',
     category: 'Basic',
     tiers: 1,
-    minYear: 3,
+    minYear: 2,
     slashCommand: '/cast obscuro',
     description: 'คาถาปิดตา เสกผ้าผูกตาสีดำพันรอบดวงตาของเป้าหมาย',
     effect: 'จอภาพของเป้าหมายมืดสนิทเป็นเวลา 3.5 วินาที',
@@ -775,7 +775,7 @@ export const ALL_SPELLS_DATA: SpellItem[] = [
     name: 'Petrificus totalus',
     category: 'Basic',
     tiers: 4,
-    minYear: 1,
+    minYear: 3,
     slashCommand: '/cast petrificus_totalus',
     description: 'คาถาสาปให้ร่างแข็งทื่อ แขนขาแนบชิดติดลำตัวล้มตึงดั่งท่อนไม้',
     effect: 'ทำให้ศัตรูขยับไม่ได้โดยสิ้นเชิง 4-8 วินาที',
@@ -808,7 +808,7 @@ export const ALL_SPELLS_DATA: SpellItem[] = [
     name: 'Protego',
     category: 'Basic',
     tiers: 4,
-    minYear: 2,
+    minYear: 1,
     slashCommand: '/cast protego',
     description: 'คาถาเกราะวิเศษ สร้างบาเรียป้องกันคาถาและสะท้อนการโจมตี',
     effect: 'ดูดซับความเสียหายเวทมนตร์และสะท้อนคาถาระดับต่ำกลับไป',
@@ -830,7 +830,7 @@ export const ALL_SPELLS_DATA: SpellItem[] = [
     name: 'Rapidus',
     category: 'Basic',
     tiers: 4,
-    minYear: 3,
+    minYear: 1,
     slashCommand: '/cast rapidus',
     description: 'คาถาเร่งความเร็ว เสริมสมรรถภาพการเคลื่อนไหวและความว่องไว',
     effect: 'เพิ่มความเร็วในการวิ่ง 30-60% เป็นเวลา 8 วินาที',
@@ -951,7 +951,7 @@ export const ALL_SPELLS_DATA: SpellItem[] = [
     name: 'Vulnera sanentur',
     category: 'Basic',
     tiers: 1,
-    minYear: 6,
+    minYear: 3,
     slashCommand: '/cast vulnera_sanentur',
     description: 'คาถาสมานบาดแผลลึก คาถาบทสวดรักษาแผลฉกรรจ์และห้ามเลือดทันที',
     effect: 'รักษาบาดแผลจากการถูกเฉือนฟัน ฟื้นฟู HP เต็มจำนวน',
@@ -1087,7 +1087,7 @@ export const ALL_SPELLS_DATA: SpellItem[] = [
     name: 'Relashio',
     category: 'Protect',
     tiers: 4,
-    minYear: 3,
+    minYear: 2,
     slashCommand: '/protect relashio [ขั้น 1-4]',
     description: 'คาถาปลดปล่อย บังคับให้เป้าหมายปล่อยมือหรือคลายสิ่งที่ยึดจับไว้',
     effect: 'ปลดพันธนาการจากเชือก โซ่ หรือการถูกล็อคคอในการประลองเวทย์',
@@ -1111,7 +1111,7 @@ export const ALL_SPELLS_DATA: SpellItem[] = [
     name: 'Finite',
     category: 'Treat',
     tiers: 4,
-    minYear: 2,
+    minYear: 3,
     slashCommand: '/treat finite [ขั้น 1-4]',
     description: 'คาถายกเลิกผลของเวทมนตร์และคำสาปทั่วไปที่กำลังทำงานอยู่',
     effect: 'ล้างสถานะดีบัฟ คำสาปสลบ ชะลอความเร็ว และการใบ้เสียง',
@@ -1131,4 +1131,65 @@ export const ALL_SPELLS_DATA: SpellItem[] = [
 ];
 
 export const INITIAL_MEMBERS: DirectoryMember[] = [];
+
+export interface CurriculumYearData {
+  year: number;
+  label: string;
+  badgeLabel: string;
+  themeColor: string;
+  borderAccent: string;
+  badgeBg: string;
+  textColor: string;
+  spellIds: string[];
+}
+
+export const HOGWORLDS_CURRICULUM: CurriculumYearData[] = [
+  {
+    year: 1,
+    label: 'ชั้นปี 1',
+    badgeLabel: 'ชั้นปี 1 (4 คาถา)',
+    themeColor: '#FEE101',
+    borderAccent: 'border-[#FEE101]/40 hover:border-[#FEE101]',
+    badgeBg: 'bg-[#FEE101]/15 text-[#FEE101] border-[#FEE101]/30',
+    textColor: 'text-[#FEE101]',
+    spellIds: ['sp-expelliarmus', 'sp-lumos', 'sp-protego', 'sp-rapidus'],
+  },
+  {
+    year: 2,
+    label: 'ชั้นปี 2',
+    badgeLabel: 'ชั้นปี 2 (7 คาถา)',
+    themeColor: '#10B981',
+    borderAccent: 'border-emerald-500/40 hover:border-emerald-400',
+    badgeBg: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
+    textColor: 'text-emerald-300',
+    spellIds: [
+      'sp-ascendio',
+      'sp-obscuro',
+      'sp-fumos',
+      'sp-stupefy',
+      'sp-tarantallegra',
+      'sp-relashio',
+      'sp-episkey',
+    ],
+  },
+  {
+    year: 3,
+    label: 'ชั้นปี 3',
+    badgeLabel: 'ชั้นปี 3 (7 คาถา)',
+    themeColor: '#38BDF8',
+    borderAccent: 'border-sky-500/40 hover:border-sky-400',
+    badgeBg: 'bg-sky-500/15 text-sky-300 border-sky-500/30',
+    textColor: 'text-sky-300',
+    spellIds: [
+      'sp-nebulus',
+      'sp-vulnera-sanentur',
+      'sp-finite',
+      'sp-ferula',
+      'sp-diffindo',
+      'sp-confundo',
+      'sp-petrificus-totalus',
+    ],
+  },
+];
+
 
